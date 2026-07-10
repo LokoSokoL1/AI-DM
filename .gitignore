@@ -216,3 +216,18 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# AI-DM local data
+data/rules/
+data/adventures/
+data/memory/
+
+# Local LLM indexes
+vector_db/
+embeddings/
+
+# Local configuration
+config/local.json
+
+# Foundry test worlds
+foundry-data/
