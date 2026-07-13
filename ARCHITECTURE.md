@@ -5,6 +5,10 @@
 \## Overview
 
 
+This structure represents the planned architecture.
+Actual folders will be created as functionality is implemented.
+
+
 
 Dungeon Manager is designed as a modular AI-powered tabletop RPG assistant.
 
