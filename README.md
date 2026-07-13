@@ -1,4 +1,4 @@
-# DungeonMind
+# Dungeon Manager
 
 A local AI Dungeon Master for Dungeons & Dragons 5e.
 
