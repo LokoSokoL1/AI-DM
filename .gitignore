@@ -234,3 +234,9 @@ foundry-data/
 
 # Runtime logs
 logs/
+
+# User campaign data
+data/characters/
+data/items/
+data/campaigns/
+data/worlds/
