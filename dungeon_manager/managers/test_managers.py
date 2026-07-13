@@ -1,31 +1,35 @@
-from .character_manager import CharacterManager
-from .item_manager import ItemManager
+from .campaign_manager import CampaignManager
 
 
 def main():
 
-    item_manager = ItemManager()
+    manager = CampaignManager()
 
-    sword = item_manager.create_item(
-        "Nightfang",
-        "Longsword",
-        "A blade forged in forgotten darkness.",
-        magical=True,
-        rarity="Rare",
-        properties=[
-            "Deals cold damage",
-            "Whispers near undead"
-        ]
+    campaign = manager.create_campaign(
+        "Lost Mine Adventure",
+        "A group searches for the lost mine of Phandelver."
     )
 
-    print("Created item:")
-    print(sword)
-
-    loaded = item_manager.load_item(
-        "Nightfang"
+    campaign.add_character(
+        "Nekria"
     )
 
-    print("\nLoaded item:")
+    campaign.add_note(
+        "The party discovered mysterious ruins."
+    )
+
+    manager.save_campaign(
+        campaign
+    )
+
+    print("Created:")
+    print(campaign)
+
+    loaded = manager.load_campaign(
+        "Lost Mine Adventure"
+    )
+
+    print("\nLoaded:")
     print(loaded)
 
 
