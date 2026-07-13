@@ -474,3 +474,46 @@ The system should work locally before adding external services.
 
 New features should support tabletop gameplay rather than adding unnecessary complexity.
 
+
+
+## Current Runtime Flow
+
+The current system architecture:
+
+User
+ |
+ v
+Dungeon Manager
+ |
+ v
+AI Provider Layer
+ |
+ v
+Tool Layer
+ |
+ +-- Character Manager
+ |
+ +-- Item Manager
+ |
+ +-- Campaign Manager
+ |
+ v
+Models
+ |
+ v
+JSON Storage
+
+
+## AI Tool Philosophy
+
+The AI model does not directly modify files.
+
+All world changes must go through controlled managers.
+
+This prevents:
+- invalid data
+- accidental overwrites
+- inconsistent campaign state
+
+The AI acts as a decision layer, while Dungeon Manager controls execution.
+
