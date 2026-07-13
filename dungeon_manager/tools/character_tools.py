@@ -1,13 +1,20 @@
 from dungeon_manager.managers.character_manager import CharacterManager
+from dungeon_manager.tools.tool_base import BaseTool
 
 
-class CharacterTools:
+class CharacterTools(BaseTool):
     """
     Tools available for AI character management.
     """
 
     def __init__(self):
         self.manager = CharacterManager()
+
+    def get_tools(self):
+        return {
+            "create_character": self.create_character,
+            "load_character": self.load_character
+        }
 
     def create_character(
         self,
@@ -34,7 +41,6 @@ class CharacterTools:
                 "class": character.character_class
             }
         }
-
 
     def load_character(self, name: str):
         """
