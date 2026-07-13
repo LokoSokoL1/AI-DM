@@ -1,4 +1,5 @@
 from .config_loader import load_config
+from .ai.manager import AIManager
 
 
 def main():
@@ -19,7 +20,18 @@ def main():
         f"AI Model: {config['ai']['model']}"
     )
 
-    print("Dungeon Manager ready.")
+    ai = AIManager(config)
+
+    print("Sending test prompt...")
+
+    response = ai.generate(
+        "Introduce yourself briefly as an AI assistant."
+    )
+
+    print("\nAI Response:")
+    print(response)
+
+    print("\nDungeon Manager ready.")
 
 
 if __name__ == "__main__":
