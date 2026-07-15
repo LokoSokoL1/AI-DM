@@ -817,6 +817,55 @@ recovery, persistence, tamper evidence, queues, transactions, retries, or world
 state projection.
 
 
+## World State Projection Foundation
+
+The standalone derived-state flow is:
+
+**ordered `GameEventJournalEntry` snapshot → exact registered reducers →
+immutable `WorldState`**
+
+`WorldState` contains a deeply immutable JSON-object view and the last
+successfully applied journal sequence. Initial state is empty at sequence zero,
+and defensive serialization returns independent JSON-compatible data. This
+state is derived data only: it is not an authority, event log, permission
+source, persistent save, snapshot, or rollback boundary, and it has no
+game-specific fields.
+
+`WorldStateProjector` registers one synchronous reducer for each exact
+case-sensitive `(event_type, schema_version)` pair. Reducers have exactly two
+required positional-or-keyword parameters: the current immutable state data and
+one immutable `GameEvent`. Registration rejects malformed metadata, duplicate
+pairs, asynchronous or uninspectable callables, positional-only parameters,
+defaults, keyword-only parameters, and variadic parameters. The immutable
+registration snapshot is sorted by event type and schema version. There are no
+wildcards, fallbacks, case normalization, or implicit migrations.
+
+Full replay starts at sequence zero; incremental projection requires the first
+supplied entry to immediately follow the starting state's last sequence. The
+projector first materializes and validates the entire ordered snapshot,
+including entry types, exact contiguous sequences, event structure, and unique
+batch event IDs. It then resolves every exact reducer before invoking any one
+of them. Unknown event types and unsupported versions fail closed rather than
+producing incomplete authoritative-looking state.
+
+Each reducer is invoked once in journal order with no retry, skip, or alternate
+selection. A reducer returns the complete next JSON-object view; its mapping is
+defensively copied and deeply frozen before another reducer can observe it.
+Only a fully successful batch produces a new state. Invalid output or a raised
+exception discards the candidate, exposes no partial state, and returns a typed
+payload-free failure with only safe event identity and schema diagnostics.
+Statuses distinguish success, invalid state or journal input, unknown event
+type, unsupported schema version, invalid reducer result, and reducer failure.
+
+Reducer purity is a contract: reducers must not mutate journals, dispatch,
+access managers or storage, call AI, or perform other side effects. The
+framework supplies immutable inputs and isolates returned state, but Python
+cannot prove that a callable has no external effects. Projection is not wired
+into `AuditedCommandPipeline`; publishing an event never runs a projection
+automatically. Persistence, subscribers, transactions, real gameplay reducers,
+rules, tools, UI, and Foundry integration remain outside this foundation.
+
+
 ## Tool Call Parsing Boundary
 
 The Tool Call Parser is a standalone part of the AI layer. It inspects one

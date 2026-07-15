@@ -38,6 +38,14 @@ from .policy_gated_dispatcher import (
     PolicyGatedDispatchStatus,
 )
 from .result import GameResult, GameResultStatus
+from .world_state import (
+    ReducerRegistration,
+    WorldState,
+    WorldStateProjectionResult,
+    WorldStateProjectionStatus,
+    WorldStateProjector,
+    WorldStateReducer,
+)
 
 __all__ = [
     "ApprovalOutcome",
@@ -71,5 +79,11 @@ __all__ = [
     "PolicyGatedDispatchResult",
     "PolicyGatedDispatchStatus",
     "PolicyReasonCode",
+    "ReducerRegistration",
+    "WorldState",
+    "WorldStateProjectionResult",
+    "WorldStateProjectionStatus",
+    "WorldStateProjector",
+    "WorldStateReducer",
     "resolve_automation_gate",
 ]

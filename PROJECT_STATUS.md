@@ -30,13 +30,11 @@ Game Engine Foundation
 
 
 
-Event Journal Publication Integration. The existing `AuditedCommandPipeline`
-now explicitly receives a `GameEventJournal` and atomically publishes the exact
-ordered event tuple from a preserved `DISPATCHED` result. The policy-gated
-dispatcher remains authoritative for policy, approval, replay protection, and
-one-attempt engine dispatch. Blocked and eventless paths do not mutate the event
-journal, while publication failure preserves dispatch and consumed replay state
-without retry.
+World State Projection Foundation. The new standalone `WorldStateProjector`
+materializes and validates complete ordered game-event journal-entry snapshots,
+resolves reducers by exact event type and schema version, and derives immutable
+`WorldState` data through atomic full replay or incremental projection. It is
+not integrated with event publication or `AuditedCommandPipeline`.
 
 
 
@@ -231,6 +229,26 @@ Publication Integration was added.
 \- The complete deterministic pytest suite passes 349 tests after Event Journal
 Publication Integration was added.
 
+\- The focused world-state projection and dependency suite passes 65 tests
+covering immutable and defensive state, full replay, incremental projection,
+strict reducer registration, exact event/schema resolution, complete sequence
+and duplicate validation, ordered single invocation, atomic controlled
+failures, sanitized diagnostics, publication separation, and dependency
+isolation.
+
+\- The complete focused engine suite passes 334 tests after the World State
+Projection Foundation was added.
+
+\- The complete deterministic pytest suite passes 408 tests after the World
+State Projection Foundation was added.
+
+\- The five isolated legacy smoke modules still pass through direct `python -m`
+execution using only temporary storage.
+
+\- Exact before/after paths, sizes, modification times, and SHA-256 hashes
+confirm that baseline and final verification leave normal `data/` and `logs/`
+unchanged.
+
 
 
 \## Implemented Functionality
@@ -384,6 +402,27 @@ with publication limited to preserved `DISPATCHED` result events and typed
 defensive serialization, independently successful post-dispatch audit and event
 journal appends, and replay-preserving no-retry publication failure
 
+\- Immutable provider- and rules-neutral `WorldState` derived data with deeply
+frozen JSON-object content, defensive serialization, and non-negative last
+successfully applied journal sequence starting at zero
+
+\- A synchronous `WorldStateProjector` with exact case-sensitive event-type and
+schema-version reducer registration, strict two-parameter callable validation,
+duplicate rejection, and immutable deterministically sorted snapshots
+
+\- Atomic full replay and incremental projection that materialize and validate
+the entire entry snapshot, require contiguous next sequences and unique batch
+event IDs, resolve all reducers first, and apply each event once without retry,
+skip, fallback, or partial-state exposure
+
+\- Immutable typed projection results distinguishing success, invalid state or
+journal input, unknown event type, unsupported schema version, invalid reducer
+output, and reducer failure with safe payload-free diagnostics
+
+\- Explicit separation from event publication and the audited command pipeline;
+projection remains pure, process-local derived computation with only test
+reducers and no automatic execution
+
 
 
 \## Partially Implemented Functionality
@@ -403,9 +442,9 @@ model behavior remains nondeterministic and intentionally outside normal tests
 
 
 
-\- World State Projection Foundation that consumes published world facts
-without adding persistence, subscribers, queues, gameplay rules, or Foundry
-integration in the completed publication milestone
+\- World State Projection Pipeline Integration that may explicitly compose the
+existing publication and projection boundaries without adding persistence,
+subscribers, queues, gameplay rules, or Foundry integration
 
 \- Durable, tamper-evident event and audit storage plus any restart-safe replay
 protection; the current journals are in-memory only
@@ -423,7 +462,8 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**World State Projection Foundation**. Define the next provider-independent
-boundary for deriving world-state views from published events without starting
-persistence, subscribers, queues, gameplay rules, UI, or Foundry integration.
+**World State Projection Pipeline Integration**. Explicitly integrate the
+existing projection foundation with the audited event-publication flow without
+starting persistence, subscribers, queues, gameplay rules, UI, or Foundry
+integration.
 

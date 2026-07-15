@@ -148,3 +148,36 @@ def test_audited_pipeline_uses_only_existing_engine_and_audit_boundaries():
     }
     assert "_handlers" not in accessed_attributes
     assert "handler" not in accessed_attributes
+
+
+def test_world_state_projection_uses_only_event_data_boundaries():
+    package_root = Path(__file__).resolve().parent
+    projection_path = package_root / "world_state.py"
+    projection_tree = ast.parse(
+        projection_path.read_text(encoding="utf-8"),
+        filename=str(projection_path),
+    )
+    relative_imports = {
+        node.module
+        for node in ast.walk(projection_tree)
+        if isinstance(node, ast.ImportFrom) and node.level > 0
+    }
+
+    assert relative_imports == {"_json", "game_event", "journals"}
+
+    for filename in ("journals.py", "audited_pipeline.py"):
+        path = package_root / filename
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        imported_boundaries = {
+            node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.level > 0
+        }
+        accessed_names = {
+            node.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Name)
+        }
+
+        assert "world_state" not in imported_boundaries
+        assert "WorldStateProjector" not in accessed_names

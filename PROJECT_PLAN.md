@@ -2,7 +2,7 @@
 
 
 
-\## Current Milestone - Event Journal Publication Integration
+\## Current Milestone - World State Projection Foundation
 
 
 
@@ -14,32 +14,33 @@ Scope:
 
 
 
-\- Add an atomic `GameEventJournal.append_batch()` operation that validates and
-materializes the complete ordered batch before one copy-on-write mutation
+\- Add immutable `WorldState` data with deeply frozen JSON-object content,
+defensive serialization, and the last successfully applied journal sequence
 
-\- Preserve the existing single-event append API while rejecting invalid event
-values, duplicate IDs within a batch, and IDs already present in the journal
-without partial mutation or sequence gaps
+\- Register synchronous reducers by exact case-sensitive event type and exact
+positive schema version, with strict callable-shape validation and immutable
+sorted registration snapshots
 
-\- Inject `GameEventJournal` explicitly into the existing
-`AuditedCommandPipeline` and publish only the exact event tuple on a preserved
-`DISPATCHED` result
+\- Materialize and completely validate ordered `GameEventJournalEntry`
+snapshots, including contiguous incremental sequence rules and duplicate event
+IDs, before invoking any reducer
 
-\- Distinguish publication as `NOT_APPLICABLE`, `NO_EVENTS`, `PUBLISHED`, or
-`FAILED`, preserving immutable appended-entry snapshots and safe errors
+\- Resolve every reducer before applying events once in journal order, with no
+fallback, retry, skip, migration, or partial-state exposure
 
-\- Preserve dispatcher authority, completed dispatch results, consumed replay
-state, and exactly-once handler behavior across publication and post-dispatch
-audit failures
+\- Return typed immutable results for success, invalid input, unknown event
+type, unsupported schema version, invalid reducer data, and reducer failure
+using safe payload-free diagnostics
 
-\- Keep event and audit journals independently successful after dispatch; do
-not add transactions, retries, persistence, queues, subscribers, or projection
+\- Keep projection pure, in-memory, and separate from event publication and the
+`AuditedCommandPipeline`
 
 
-Only test handlers produce events. Current tools, managers, AI routing, rules,
-storage, UI, and Foundry behavior remain unchanged.
+Only test reducers exist. Current tools, managers, AI routing, rules, storage,
+UI, Foundry behavior, event publication, and command dispatch remain unchanged.
 
-Next milestone: **World State Projection Foundation**. It has not started.
+Next milestone: **World State Projection Pipeline Integration**. It has not
+started.
 
 
 
