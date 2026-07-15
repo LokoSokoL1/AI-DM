@@ -1,6 +1,6 @@
 """Separate process-local append-only game-event and command-audit journals."""
 
-from collections.abc import Iterable, Mapping, Set as AbstractSet
+from collections.abc import Callable, Iterable, Mapping, Set as AbstractSet
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any, Optional
@@ -69,6 +69,37 @@ class GameEventJournal:
 
         with self.__lock:
             return self.__entries
+
+    @property
+    def tail_sequence(self) -> int:
+        """Return the current append-only tail sequence without event data."""
+
+        with self.__lock:
+            return len(self.__entries)
+
+    def _commit_if_tail_unchanged(
+        self,
+        expected_tail_sequence: int,
+        commit: Callable[[], None],
+    ) -> bool:
+        """Run one coordinator commit only while the expected tail is held."""
+
+        if (
+            not isinstance(expected_tail_sequence, int)
+            or isinstance(expected_tail_sequence, bool)
+            or expected_tail_sequence < 0
+        ):
+            raise ValueError(
+                "Expected journal tail sequence must be a non-negative integer."
+            )
+        if not callable(commit):
+            raise ValueError("Journal-tail commit action must be callable.")
+
+        with self.__lock:
+            if len(self.__entries) != expected_tail_sequence:
+                return False
+            commit()
+            return True
 
     def append(self, event: GameEvent) -> GameEventJournalEntry:
         """Atomically append one unique event and assign its sequence."""

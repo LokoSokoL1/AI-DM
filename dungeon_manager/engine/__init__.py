@@ -53,6 +53,11 @@ from .world_state_holder import (
     WorldStateHolder,
     WorldStateSynchronizationStatus,
 )
+from .world_state_recovery import (
+    WorldStateRecoveryResult,
+    WorldStateRecoveryStatus,
+    WorldStateRecoveryStrategy,
+)
 
 __all__ = [
     "ApprovalOutcome",
@@ -95,6 +100,9 @@ __all__ = [
     "WorldStateProjectionResult",
     "WorldStateProjectionStatus",
     "WorldStateProjector",
+    "WorldStateRecoveryResult",
+    "WorldStateRecoveryStatus",
+    "WorldStateRecoveryStrategy",
     "WorldStateReducer",
     "WorldStateSynchronizationStatus",
     "resolve_automation_gate",

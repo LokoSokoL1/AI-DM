@@ -815,10 +815,11 @@ snapshot and payload-free synchronization health, and has no public mutation,
 patch, delete, rollback, recovery, or rebuild API. Pipeline construction compares
 the state's last sequence with the event-journal tail. A mismatch marks the
 holder out of sync and makes submissions unavailable; each later coordinated
-submission rechecks the tail before dispatch. A successful complete projection
-is the only operation that replaces the committed state. A failed projection
-leaves the prior snapshot unchanged and irreversibly marks this process-local
-holder out of sync for this milestone.
+submission rechecks the tail before dispatch. A successful complete incremental
+projection or explicit coordinated recovery is the only operation that replaces
+the committed state. A failed command projection leaves the prior snapshot
+unchanged, marks this process-local holder out of sync, and requires deliberate
+recovery before later dispatch can resume.
 
 The audit-failure boundary is the engine call. Every required pre-dispatch
 append, including `DISPATCH_ATTEMPTED`, must succeed before replay is consumed
@@ -829,10 +830,10 @@ Validated result events are published atomically before the final
 `DISPATCH_COMPLETED` audit append. Successful publication is immediately
 followed by projection of exactly its returned entries while the pipeline's one
 outer coordination lock remains held. A non-reentrant thread-local guard rejects
-same-thread recursive invocation before policy evaluation or replay consumption;
-other concurrent callers wait and then project from the state committed by the
-preceding call. This keeps journal and projection order identical and prevents
-lost state updates.
+same-thread recursive dispatch or recovery before policy evaluation, replay
+consumption, or reducer re-entry; other concurrent dispatch and recovery callers
+wait and then use the state committed by the preceding call. This keeps journal
+and projection order identical and prevents lost state updates.
 
 Publication failure leaves the entire new batch absent, preserves completed
 dispatch and consumed replay state, skips projection, and is not retried.
@@ -848,7 +849,8 @@ handler, publication operation, or reducer.
 Auditing, event publication, and replay protection remain process-local and
 non-durable. They do not provide restart-safe idempotency or publication
 recovery, persistence, tamper evidence, queues, transactions, retries, or
-automatic world-state recovery/rebuild.
+automatic world-state recovery/rebuild. The explicit process-local recovery
+boundary below does not make any of these components durable.
 
 
 ## World State Projection Foundation
@@ -896,9 +898,70 @@ access managers or storage, call AI, or perform other side effects. The
 framework supplies immutable inputs and isolates returned state, but Python
 cannot prove that a callable has no external effects. The projector itself
 remains pure and stateless; the audited integration described above coordinates
-its explicit invocation after publication. Persistence, recovery/rebuild,
-subscribers, transactions, real gameplay reducers, rules, tools, UI, and
-Foundry integration remain outside this foundation.
+its explicit invocation after publication. The explicit recovery coordinator
+described below remains outside the projector. Persistence, subscribers,
+transactions, real gameplay reducers, rules, tools, UI, and Foundry integration
+remain outside this foundation.
+
+
+## World State Projection Recovery and Rebuild
+
+The explicit process-local recovery flow is:
+
+**typed recovery strategy → existing `AuditedCommandPipeline` coordination
+boundary → one immutable authoritative `GameEventJournal` snapshot → existing
+`WorldStateProjector` → unchanged-tail verification → atomic holder commit**
+
+`AuditedCommandPipeline.recover_world_state()` is a synchronous trusted internal
+or operator API. It does not establish roles or permission authority. It uses the
+same non-reentrant lock and thread-local active guard as ordinary pipeline
+dispatch, so recovery and dispatch cannot run concurrently, two recoveries
+cannot update state concurrently, and same-thread recovery from an active
+handler or reducer returns controlled `UNAVAILABLE` metadata without waiting on
+the held lock.
+
+`CATCH_UP` starts from the holder's exact committed `WorldState`, rejects state
+ahead of the captured journal tail, and supplies only entries after the state's
+`last_sequence` to `WorldStateProjector.project()`. When synchronized state is
+already at the tail, it returns `NO_ACTION` without invoking a reducer. A fully
+successful catch-up atomically replaces state and clears out-of-sync health only
+when the recovered sequence equals the captured tail.
+
+`FULL_REBUILD` requires an explicitly supplied immutable `WorldState` whose
+sequence is zero. It never invents an empty or other default base. The complete
+captured journal is projected from sequence one; an empty journal may therefore
+commit the supplied sequence-zero base. Because journal events are authoritative
+and state is derived, successful rebuild may replace synchronized-but-stale or
+out-of-sync derived data. The supplied base and previous committed state remain
+immutable throughout candidate construction.
+
+Recovery captures exactly one immutable journal-entry snapshot while holding the
+outer coordination boundary. Reducers resolve and run once in journal order
+under the existing projector rules, without retry, skip, fallback, migration, or
+partial exposure. Before commit, the coordinator compares the live append-only
+journal tail with the captured tail. A change returns `JOURNAL_CHANGED`, leaves
+the previous state unchanged, and keeps or marks health out of sync as required.
+Only a complete typed projection reaching the captured tail enters the holder's
+single atomic state-and-health replacement boundary.
+
+`WorldStateRecoveryResult` is immutable and distinguishes `RECOVERED`,
+`NO_ACTION`, `INVALID_REQUEST`, `PROJECTION_FAILURE`, `JOURNAL_CHANGED`,
+`UNAVAILABLE`, and `COORDINATOR_FAILURE`. It exposes only the typed strategy,
+previous and captured-tail sequences, a successful resulting sequence,
+controlled projector status/reason, and safe error text. It never contains state
+data, event payloads, reducer or handler output, prompts, credentials, hidden
+campaign content, raw exceptions, or tracebacks; serialization returns an
+independent JSON-compatible dictionary.
+
+Recovery does not call `GameEngine`, handlers, automation policy, approval
+resolution, replay protection, event publication, or either journal's append
+operation. It consumes no command ID, creates no game event or command audit
+record, and is never entered automatically from ordinary dispatch. Failed
+recovery does not commit partial state or invalidate a synchronized state merely
+because an optional rebuild failed. Durable journals, persistence, journal
+repair or rewriting, migrations, rollback, transactions, loading, subscribers,
+queues, background workers, authorization, and real gameplay reducers remain
+outside this milestone.
 
 
 ## Tool Call Parsing Boundary

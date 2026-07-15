@@ -174,6 +174,7 @@ class WorldStateHolder:
 
         with self.__lock:
             if self.__status is WorldStateSynchronizationStatus.OUT_OF_SYNC:
+                self.__journal_sequence = journal_sequence
                 return False
             if self.__state.last_sequence == journal_sequence:
                 self.__journal_sequence = journal_sequence
@@ -263,3 +264,48 @@ class WorldStateHolder:
             self.__journal_sequence = journal_sequence
             self.__reason_code = reason_code
             self.__projector_status = projector_status
+
+    def _commit_recovery(
+        self,
+        projection_result: WorldStateProjectionResult,
+        *,
+        expected_previous_state: WorldState,
+        journal_sequence: int,
+    ) -> None:
+        """Atomically replace state and health after explicit recovery."""
+
+        _validate_sequence(journal_sequence, "Game-event journal tail sequence")
+        if not isinstance(expected_previous_state, WorldState):
+            raise ValueError(
+                "World-state recovery requires the prior committed state."
+            )
+        expected_previous_state.validate()
+        if not isinstance(projection_result, WorldStateProjectionResult):
+            raise ValueError(
+                "World-state recovery commit requires a typed projection "
+                "result."
+            )
+        if (
+            projection_result.status is not WorldStateProjectionStatus.SUCCESS
+            or not isinstance(projection_result.state, WorldState)
+        ):
+            raise ValueError(
+                "World-state recovery commit requires successful projection."
+            )
+        projection_result.state.validate()
+        if projection_result.state.last_sequence != journal_sequence:
+            raise ValueError(
+                "Recovered world-state sequence must match the journal tail."
+            )
+
+        with self.__lock:
+            if self.__state is not expected_previous_state:
+                raise ValueError(
+                    "Committed world state changed during recovery."
+                )
+
+            self.__state = projection_result.state
+            self.__status = WorldStateSynchronizationStatus.SYNCHRONIZED
+            self.__journal_sequence = journal_sequence
+            self.__reason_code = None
+            self.__projector_status = None

@@ -30,13 +30,14 @@ Game Engine Foundation
 
 
 
-World State Projection Pipeline Integration. `AuditedCommandPipeline` now
-coordinates dispatch, atomic event publication, projection of exactly the
-returned sequenced journal entries, and complete committed-state replacement
-through an explicit process-local `WorldStateHolder`. Projection failure leaves
-published events present and the previous state unchanged, marks synchronization
-out of sync, and blocks later dispatch. The standalone `WorldStateProjector`
-remains pure and stateless.
+World State Projection Recovery and Rebuild. `AuditedCommandPipeline` now
+provides an explicit synchronous recovery entry point using the same outer
+coordination boundary as command publication and projection. Typed catch-up and
+full-rebuild strategies recover only from one authoritative immutable
+`GameEventJournal` snapshot, commit state and health atomically after an
+unchanged-tail check, and never dispatch commands, publish events, create audit
+records, or retry reducers. The standalone `WorldStateProjector` remains pure
+and stateless.
 
 
 
@@ -265,6 +266,20 @@ execution using only temporary storage.
 confirm that baseline and final verification leave normal `data/` and `logs/`
 unchanged.
 
+\- The focused world-state recovery and dependency suite passes 32 tests
+covering synchronized no-op, catch-up, full rebuild, explicit bases, stale and
+out-of-sync replacement, projector failures, atomic state/health preservation,
+exact journal-tail completion, reducer ordering, journal-change detection,
+dispatch restoration, incremental continuation, concurrency, re-entry,
+sanitization, serialization, authoritative-snapshot input, and strict
+dependencies.
+
+\- The complete focused engine suite passes 381 tests after World State
+Projection Recovery and Rebuild was added.
+
+\- The complete deterministic pytest suite passes 455 tests after World State
+Projection Recovery and Rebuild was added.
+
 
 
 \## Implemented Functionality
@@ -465,6 +480,26 @@ projection, projection failure preserves events/replay and the previous state
 while blocking later dispatch, and successful event/state updates survive a
 later audit failure without rollback or retry
 
+\- An explicit trusted/operator `AuditedCommandPipeline.recover_world_state()`
+boundary with typed `CATCH_UP` and `FULL_REBUILD` strategies; catch-up uses only
+entries after the current committed sequence, while full rebuild requires a
+caller-supplied immutable sequence-zero base and replays the complete journal
+
+\- Immutable recovery results distinguishing `RECOVERED`, `NO_ACTION`,
+`INVALID_REQUEST`, `PROJECTION_FAILURE`, `JOURNAL_CHANGED`, `UNAVAILABLE`, and
+`COORDINATOR_FAILURE` with sequence-only, controlled projector, and safe error
+metadata
+
+\- Recovery shares the pipeline's synchronous non-reentrant coordination lock,
+captures one immutable authoritative journal snapshot, verifies its tail before
+commit, and replaces state plus synchronization health once only after complete
+projection success
+
+\- Failed recovery preserves committed state and appropriate existing health;
+successful recovery reaches the captured journal tail and clears out-of-sync
+health without dispatch, policy, approval, replay use, publication, audit
+records, retries, skips, or fallback
+
 
 
 \## Partially Implemented Functionality
@@ -484,11 +519,8 @@ model behavior remains nondeterministic and intentionally outside normal tests
 
 
 
-\- World State Projection Recovery and Rebuild, without adding durable storage,
-subscriptions, queues, gameplay rules, or Foundry integration
-
-\- Durable, tamper-evident event and audit storage plus any restart-safe replay
-protection; the current journals are in-memory only
+\- Durable Event Journal Persistence Foundation; the current event and audit
+journals, replay protection, and world-state recovery remain process-local only
 
 \- Any later multi-step agent loop
 
@@ -503,7 +535,7 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**World State Projection Recovery and Rebuild**. Add an explicit future recovery
-boundary for an unavailable/out-of-sync projection without starting durable
-storage, subscriptions, queues, gameplay rules, UI, or Foundry integration.
+**Durable Event Journal Persistence Foundation**. It has not started; this
+milestone does not add storage, migrations, campaign loading, repair, rollback,
+queues, subscriptions, gameplay rules, UI, or Foundry integration.
 

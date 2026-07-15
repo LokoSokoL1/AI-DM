@@ -147,6 +147,7 @@ def test_audited_pipeline_uses_only_existing_engine_and_audit_boundaries():
         "policy_gated_dispatcher",
         "world_state",
         "world_state_holder",
+        "world_state_recovery",
     }
     assert "_handlers" not in accessed_attributes
     assert "handler" not in accessed_attributes
@@ -203,3 +204,23 @@ def test_world_state_holder_depends_only_on_projection_boundary():
     assert relative_imports == {"world_state"}
     assert "GameEventJournal" not in accessed_names
     assert "AuditedCommandPipeline" not in accessed_names
+
+
+def test_world_state_recovery_result_depends_only_on_safe_data_boundaries():
+    path = Path(__file__).resolve().parent / "world_state_recovery.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    relative_imports = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level > 0
+    }
+    accessed_names = {
+        node.id for node in ast.walk(tree) if isinstance(node, ast.Name)
+    }
+
+    assert relative_imports == {"_json", "world_state"}
+    assert "GameEngine" not in accessed_names
+    assert "GameEventJournal" not in accessed_names
+    assert "CommandAuditJournal" not in accessed_names
+    assert "PolicyGatedCommandDispatcher" not in accessed_names

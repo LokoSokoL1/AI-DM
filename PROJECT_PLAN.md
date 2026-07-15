@@ -2,7 +2,7 @@
 
 
 
-\## Current Milestone - World State Projection Pipeline Integration
+\## Current Milestone - World State Projection Recovery and Rebuild
 
 
 
@@ -14,31 +14,28 @@ Scope:
 
 
 
-\- Add an explicit process-local `WorldStateHolder` for one immutable committed
-snapshot plus payload-free synchronized/out-of-sync health
+\- Add an explicit trusted/operator `recover_world_state()` API to the existing
+`AuditedCommandPipeline` without creating another dispatch pipeline
 
-\- Require the current state sequence and injected event-journal tail to agree
-at pipeline construction and before each dispatch, failing closed on mismatch
+\- Support typed `CATCH_UP` from the holder's committed state and typed
+`FULL_REBUILD` from a caller-supplied immutable sequence-zero base state
 
-\- Extend `AuditedCommandPipeline` with explicit projector and state-holder
-dependencies while leaving policy, replay, dispatch, publication, and reducer
-rules authoritative in their existing components
+\- Serialize recovery, command dispatch, publication, and projection through the
+same synchronous non-reentrant coordination boundary
 
-\- After successful atomic publication, project exactly the immutable sequenced
-journal entries returned by that publication and commit only a complete
-successful projection
+\- Capture one authoritative immutable event-journal snapshot, project with the
+existing `WorldStateProjector`, verify its tail remains unchanged, and commit
+state plus synchronization health only after complete success
 
-\- Serialize pipeline submissions through one synchronous non-reentrant
-coordination boundary so concurrent calls preserve journal/projection order and
-recursive calls fail before dispatch
+\- Preserve the previous committed state and appropriate health on every failed
+recovery, while allowing successful rebuild to replace stale derived state
 
-\- Return typed `NOT_APPLICABLE`, `UNCHANGED`, `PROJECTED`, `FAILED`, or
-`UNAVAILABLE` projection disposition with sequence-only, controlled status,
-reason, and safe error metadata
+\- Return typed `RECOVERED`, `NO_ACTION`, `INVALID_REQUEST`,
+`PROJECTION_FAILURE`, `JOURNAL_CHANGED`, `UNAVAILABLE`, or
+`COORDINATOR_FAILURE` metadata without exposing world-state or event data
 
-\- Preserve published events and replay consumption on projection failure,
-leave the previous state unchanged, mark projection out of sync, and block later
-dispatch until a future explicit recovery boundary exists
+\- Keep recovery deliberately requested and free of command dispatch, policy,
+approval, replay, publication, command audit records, retries, and fallback
 
 
 Only test reducers and synthetic events exist. Current tools, managers, AI
@@ -46,7 +43,7 @@ routing, rules, storage, UI, Foundry behavior, and unaudited command dispatch
 remain unchanged. Audit, event, and state updates remain deliberately
 non-transactional and process-local.
 
-Next milestone: **World State Projection Recovery and Rebuild**. It has not
+Next milestone: **Durable Event Journal Persistence Foundation**. It has not
 started.
 
 

@@ -31,6 +31,7 @@ from .policy_gated_dispatcher import (
     PolicyGatedDispatchStatus,
 )
 from .world_state import (
+    WorldState,
     WorldStateProjectionResult,
     WorldStateProjectionStatus,
     WorldStateProjector,
@@ -40,6 +41,11 @@ from .world_state_holder import (
     WorldStateHealth,
     WorldStateHolder,
     WorldStateSynchronizationStatus,
+)
+from .world_state_recovery import (
+    WorldStateRecoveryResult,
+    WorldStateRecoveryStatus,
+    WorldStateRecoveryStrategy,
 )
 
 
@@ -70,7 +76,55 @@ _PROJECTION_UNAVAILABLE_ERROR = (
 _REENTRANT_PIPELINE_ERROR = (
     "Re-entrant audited pipeline invocation was rejected before dispatch."
 )
+_RECOVERY_INVALID_CATCH_UP_BASE_ERROR = (
+    "Catch-up recovery does not accept a rebuild base state."
+)
+_RECOVERY_MISSING_REBUILD_BASE_ERROR = (
+    "Full rebuild requires an explicit immutable base world state."
+)
+_RECOVERY_INVALID_REBUILD_BASE_ERROR = (
+    "Full rebuild requires a structurally valid sequence-zero base world state."
+)
+_RECOVERY_STATE_AHEAD_ERROR = (
+    "Catch-up recovery cannot project state that is ahead of the event journal."
+)
+_RECOVERY_OUT_OF_SYNC_AT_TAIL_ERROR = (
+    "Catch-up recovery cannot clear out-of-sync health without unapplied events."
+)
+_RECOVERY_PROJECTION_FAILURE_ERROR = (
+    "World-state recovery projection failed; no recovered state was committed."
+)
+_RECOVERY_JOURNAL_CHANGED_ERROR = (
+    "The event journal changed during recovery; no recovered state was committed."
+)
+_RECOVERY_UNAVAILABLE_ERROR = (
+    "World-state recovery is unavailable during an active pipeline operation."
+)
+_RECOVERY_COORDINATOR_FAILURE_ERROR = (
+    "World-state recovery failed safely before committing recovered state."
+)
 _INTEGRATION_ERROR = "The audited command pipeline failed safely."
+
+_RECOVERY_PROJECTOR_REASONS = {
+    WorldStateProjectionStatus.INVALID_STATE: (
+        "The recovery starting state was rejected."
+    ),
+    WorldStateProjectionStatus.INVALID_ENTRY_OR_SEQUENCE: (
+        "The captured event-journal sequence was rejected."
+    ),
+    WorldStateProjectionStatus.UNKNOWN_EVENT_TYPE: (
+        "The captured journal contains an unknown event type."
+    ),
+    WorldStateProjectionStatus.UNSUPPORTED_SCHEMA_VERSION: (
+        "The captured journal contains an unsupported event schema version."
+    ),
+    WorldStateProjectionStatus.INVALID_REDUCER_RESULT: (
+        "A recovery reducer returned an invalid state object."
+    ),
+    WorldStateProjectionStatus.REDUCER_FAILURE: (
+        "A recovery reducer failed."
+    ),
+}
 
 _INVALID_APPROVAL_REASONS = {
     GateReasonCode.INVALID_APPROVAL,
@@ -1144,6 +1198,276 @@ class AuditedCommandPipeline:
             finally:
                 self._coordination_context.active = False
 
+    def recover_world_state(
+        self,
+        strategy: WorldStateRecoveryStrategy,
+        *,
+        base_state: Optional[WorldState] = None,
+    ) -> WorldStateRecoveryResult:
+        """Explicitly recover derived state from the authoritative journal."""
+
+        if not isinstance(strategy, WorldStateRecoveryStrategy):
+            raise TypeError(
+                "World-state recovery requires a typed recovery strategy."
+            )
+
+        if getattr(self._coordination_context, "active", False):
+            return self._reentrant_recovery_result(strategy)
+
+        with self._coordination_lock:
+            self._coordination_context.active = True
+            try:
+                return self._recover_world_state_coordinated(
+                    strategy,
+                    base_state,
+                )
+            finally:
+                self._coordination_context.active = False
+
+    def _recover_world_state_coordinated(
+        self,
+        strategy: WorldStateRecoveryStrategy,
+        base_state: Optional[WorldState],
+    ) -> WorldStateRecoveryResult:
+        previous_state = self._state_holder.snapshot
+        previous_sequence = previous_state.last_sequence
+        captured_tail = self._state_holder.health.journal_sequence
+
+        try:
+            journal_snapshot = self._event_journal.entries
+            if not isinstance(journal_snapshot, tuple):
+                raise ValueError(
+                    "Recovery requires an immutable journal snapshot."
+                )
+            captured_tail = (
+                0
+                if not journal_snapshot
+                else journal_snapshot[-1].sequence
+            )
+        except Exception:
+            logger.error(
+                "World-state recovery journal snapshot failed safely "
+                "(strategy=%s, previous_sequence=%s)",
+                strategy.value,
+                previous_sequence,
+            )
+            return self._recovery_failure_result(
+                strategy,
+                WorldStateRecoveryStatus.COORDINATOR_FAILURE,
+                previous_sequence,
+                captured_tail,
+                _RECOVERY_COORDINATOR_FAILURE_ERROR,
+            )
+
+        if strategy is WorldStateRecoveryStrategy.CATCH_UP:
+            if base_state is not None:
+                return self._recovery_failure_result(
+                    strategy,
+                    WorldStateRecoveryStatus.INVALID_REQUEST,
+                    previous_sequence,
+                    captured_tail,
+                    _RECOVERY_INVALID_CATCH_UP_BASE_ERROR,
+                )
+            if previous_sequence > captured_tail:
+                return self._recovery_failure_result(
+                    strategy,
+                    WorldStateRecoveryStatus.INVALID_REQUEST,
+                    previous_sequence,
+                    captured_tail,
+                    _RECOVERY_STATE_AHEAD_ERROR,
+                )
+            if previous_sequence == captured_tail:
+                health = self._state_holder.health
+                if (
+                    health.status
+                    is WorldStateSynchronizationStatus.SYNCHRONIZED
+                    and health.journal_sequence == captured_tail
+                ):
+                    return WorldStateRecoveryResult(
+                        strategy=strategy,
+                        status=WorldStateRecoveryStatus.NO_ACTION,
+                        previous_sequence=previous_sequence,
+                        captured_journal_tail_sequence=captured_tail,
+                        resulting_sequence=previous_sequence,
+                    )
+                return self._recovery_failure_result(
+                    strategy,
+                    WorldStateRecoveryStatus.INVALID_REQUEST,
+                    previous_sequence,
+                    captured_tail,
+                    _RECOVERY_OUT_OF_SYNC_AT_TAIL_ERROR,
+                )
+
+            projection_entries = journal_snapshot[previous_sequence:]
+            projection_start = previous_state
+        else:
+            if not isinstance(base_state, WorldState):
+                return self._recovery_failure_result(
+                    strategy,
+                    WorldStateRecoveryStatus.INVALID_REQUEST,
+                    previous_sequence,
+                    captured_tail,
+                    _RECOVERY_MISSING_REBUILD_BASE_ERROR,
+                )
+            try:
+                base_state.validate()
+            except (TypeError, ValueError):
+                return self._recovery_failure_result(
+                    strategy,
+                    WorldStateRecoveryStatus.INVALID_REQUEST,
+                    previous_sequence,
+                    captured_tail,
+                    _RECOVERY_INVALID_REBUILD_BASE_ERROR,
+                )
+            if base_state.last_sequence != 0:
+                return self._recovery_failure_result(
+                    strategy,
+                    WorldStateRecoveryStatus.INVALID_REQUEST,
+                    previous_sequence,
+                    captured_tail,
+                    _RECOVERY_INVALID_REBUILD_BASE_ERROR,
+                )
+
+            projection_entries = journal_snapshot
+            projection_start = base_state
+
+        try:
+            projection_result = self._projector.project(
+                projection_entries,
+                projection_start,
+            )
+        except Exception:
+            logger.error(
+                "World-state recovery projector contract failed safely "
+                "(strategy=%s, previous_sequence=%s, captured_tail=%s)",
+                strategy.value,
+                previous_sequence,
+                captured_tail,
+            )
+            return self._recovery_failure_result(
+                strategy,
+                WorldStateRecoveryStatus.COORDINATOR_FAILURE,
+                previous_sequence,
+                captured_tail,
+                _RECOVERY_COORDINATOR_FAILURE_ERROR,
+            )
+
+        if not isinstance(projection_result, WorldStateProjectionResult):
+            return self._recovery_failure_result(
+                strategy,
+                WorldStateRecoveryStatus.COORDINATOR_FAILURE,
+                previous_sequence,
+                captured_tail,
+                _RECOVERY_COORDINATOR_FAILURE_ERROR,
+            )
+        if projection_result.status is not WorldStateProjectionStatus.SUCCESS:
+            return self._recovery_failure_result(
+                strategy,
+                WorldStateRecoveryStatus.PROJECTION_FAILURE,
+                previous_sequence,
+                captured_tail,
+                _RECOVERY_PROJECTION_FAILURE_ERROR,
+                projector_status=projection_result.status,
+                projector_reason=_RECOVERY_PROJECTOR_REASONS[
+                    projection_result.status
+                ],
+            )
+
+        recovered_state = projection_result.state
+        try:
+            if not isinstance(recovered_state, WorldState):
+                raise ValueError("Recovery projector returned no state.")
+            recovered_state.validate()
+            if recovered_state.last_sequence != captured_tail:
+                raise ValueError(
+                    "Recovery projector did not reach the captured tail."
+                )
+        except Exception:
+            logger.error(
+                "World-state recovery result contract failed safely "
+                "(strategy=%s, previous_sequence=%s, captured_tail=%s)",
+                strategy.value,
+                previous_sequence,
+                captured_tail,
+            )
+            return self._recovery_failure_result(
+                strategy,
+                WorldStateRecoveryStatus.COORDINATOR_FAILURE,
+                previous_sequence,
+                captured_tail,
+                _RECOVERY_COORDINATOR_FAILURE_ERROR,
+            )
+
+        try:
+            committed = self._event_journal._commit_if_tail_unchanged(
+                captured_tail,
+                lambda: self._state_holder._commit_recovery(
+                    projection_result,
+                    expected_previous_state=previous_state,
+                    journal_sequence=captured_tail,
+                ),
+            )
+        except Exception:
+            logger.error(
+                "World-state recovery commit failed safely "
+                "(strategy=%s, previous_sequence=%s, captured_tail=%s)",
+                strategy.value,
+                previous_sequence,
+                captured_tail,
+            )
+            return self._recovery_failure_result(
+                strategy,
+                WorldStateRecoveryStatus.COORDINATOR_FAILURE,
+                previous_sequence,
+                captured_tail,
+                _RECOVERY_COORDINATOR_FAILURE_ERROR,
+            )
+
+        if not committed:
+            current_tail = self._event_journal.tail_sequence
+            self._state_holder._check_journal_sequence(
+                current_tail,
+                ProjectionReasonCode.JOURNAL_SEQUENCE_MISMATCH,
+            )
+            return self._recovery_failure_result(
+                strategy,
+                WorldStateRecoveryStatus.JOURNAL_CHANGED,
+                previous_sequence,
+                captured_tail,
+                _RECOVERY_JOURNAL_CHANGED_ERROR,
+                projector_status=WorldStateProjectionStatus.SUCCESS,
+            )
+
+        return WorldStateRecoveryResult(
+            strategy=strategy,
+            status=WorldStateRecoveryStatus.RECOVERED,
+            previous_sequence=previous_sequence,
+            captured_journal_tail_sequence=captured_tail,
+            resulting_sequence=captured_tail,
+            projector_status=WorldStateProjectionStatus.SUCCESS,
+        )
+
+    @staticmethod
+    def _recovery_failure_result(
+        strategy: WorldStateRecoveryStrategy,
+        status: WorldStateRecoveryStatus,
+        previous_sequence: int,
+        captured_tail: int,
+        error: str,
+        *,
+        projector_status: Optional[WorldStateProjectionStatus] = None,
+        projector_reason: Optional[str] = None,
+    ) -> WorldStateRecoveryResult:
+        return WorldStateRecoveryResult(
+            strategy=strategy,
+            status=status,
+            previous_sequence=previous_sequence,
+            captured_journal_tail_sequence=captured_tail,
+            projector_status=projector_status,
+            projector_reason=projector_reason,
+            error=error,
+        )
+
     def _dispatch_coordinated(
         self,
         command: GameCommand,
@@ -1288,6 +1612,22 @@ class AuditedCommandPipeline:
             projector_status=health.projector_status,
         )
 
+    def _reentrant_recovery_result(
+        self,
+        strategy: WorldStateRecoveryStrategy,
+    ) -> WorldStateRecoveryResult:
+        health = self._state_holder.health
+        try:
+            captured_tail = self._event_journal.tail_sequence
+        except Exception:
+            captured_tail = health.journal_sequence
+        return self._recovery_failure_result(
+            strategy,
+            WorldStateRecoveryStatus.UNAVAILABLE,
+            health.committed_sequence,
+            captured_tail,
+            _RECOVERY_UNAVAILABLE_ERROR,
+        )
+
     def _journal_tail_sequence(self) -> int:
-        entries = self._event_journal.entries
-        return 0 if not entries else entries[-1].sequence
+        return self._event_journal.tail_sequence
