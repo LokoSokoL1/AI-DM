@@ -517,3 +517,18 @@ This prevents:
 
 The AI acts as a decision layer, while Dungeon Manager controls execution.
 
+
+## Tool Call Parsing Boundary
+
+The Tool Call Parser is a standalone part of the AI layer. It inspects one
+complete AI response and classifies it as a valid tool request, an ordinary
+response with no tool request, or a malformed tool request.
+
+A structurally valid request contains a non-empty `tool` string and an
+`arguments` object. Omitted arguments default to an empty object. The parser may
+accept one clean JSON Markdown fence only when the fence contains the entire
+response; it does not scan surrounding prose for embedded JSON.
+
+Parsing does not look up the tool registry, execute a tool, modify game state, or
+change `ToolAgent` behavior. Those responsibilities belong to later milestones.
+
