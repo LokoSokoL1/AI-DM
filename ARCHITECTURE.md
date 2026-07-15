@@ -552,12 +552,43 @@ fallback tool, or access storage directly. State changes still flow through
 registered tools and their managers.
 
 
+## Tool Specification and Initial Prompt Boundary
+
+`ToolSpec` is an immutable, provider-neutral description of one registered tool.
+It contains a unique non-empty name, a model-facing description, and a JSON
+Schema-compatible object input schema with described properties, an explicit
+required list, and `additionalProperties: false`. Character-tool metadata stays
+beside `CharacterTools`, not in `ToolAgent` or a provider implementation.
+
+`ToolRegistry` pairs each specification with its callable. Registration rejects
+duplicate names, malformed metadata, specification/registry name mismatches,
+uninspectable or variadic callables, advertised arguments that the callable does
+not accept, unadvertised callable parameters, and disagreement between the
+schema's required list and callable defaults. Existing `get_tools()` and
+execution behavior remain available. `get_tool_specs()` returns an immutable
+tuple in tool-name order; specifications use read-only nested mappings and
+produce independent JSON-compatible dictionaries for catalogs.
+
+Signature introspection reliably validates keyword parameter names and whether
+defaults make them optional. It deliberately does not infer or enforce JSON
+types from Python annotations because the executor performs signature binding,
+not runtime type validation. JSON property types remain explicit provider-neutral
+metadata for future adapters.
+
+The initial `ToolAgent` prompt serializes the sorted registry catalog as compact
+canonical JSON. It clearly delimits both catalog and user request, includes a
+tool-call example generated from specification examples, and requires exactly
+one bare JSON object for a single tool call. The prompt forbids prose, Markdown
+fences, unknown tools, missing required arguments, and invented arguments. When
+no tool is needed, it instructs the model to return ordinary text.
+
+
 ## ToolAgent Single-Tool Observation/Response Boundary
 
-`ToolAgent` constructs the existing initial prompt from the user request and the
-names exposed by one central `ToolRegistry`, then makes one request through the
-provider abstraction. The complete raw initial response is passed once to the
-Tool Call Parser.
+`ToolAgent` constructs the initial prompt from the user request and
+provider-neutral specifications exposed by one central `ToolRegistry`, then
+makes one request through the provider abstraction. The complete raw initial
+response is passed once to the Tool Call Parser.
 
 Ordinary responses and malformed tool requests preserve their existing
 single-provider behavior without execution. A valid `ToolCall` is passed to the

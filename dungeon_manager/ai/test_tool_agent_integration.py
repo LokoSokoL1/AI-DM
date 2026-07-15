@@ -1,4 +1,5 @@
 import hashlib
+import inspect
 import json
 from pathlib import Path
 
@@ -11,11 +12,16 @@ from dungeon_manager.ai.tool_executor import (
 )
 from dungeon_manager.storage.json_storage import JSONStorage
 from dungeon_manager.tools.registry import ToolRegistry
+from dungeon_manager.tools.tool_spec import ToolSpec
 
 from . import tool_agent as tool_agent_module
 from .tool_agent import (
+    TOOL_CATALOG_END,
+    TOOL_CATALOG_START,
     TOOL_OBSERVATION_END,
     TOOL_OBSERVATION_START,
+    USER_REQUEST_END,
+    USER_REQUEST_START,
     ToolAgent,
     ToolAgentResultStatus,
 )
@@ -39,12 +45,48 @@ class StubProvider(AIProvider):
 
 
 class RecordingRegistry:
-    def __init__(self, tools):
+    def __init__(self, tools, specs=None):
         self.tools = tools
+        self.specs = tuple(
+            specs
+            if specs is not None
+            else (
+                self._spec_for(name, tool)
+                for name, tool in tools.items()
+            )
+        )
         self.execute_calls = []
+
+    @staticmethod
+    def _spec_for(name, tool):
+        signature = inspect.signature(tool)
+        properties = {}
+        required = []
+
+        for parameter_name, parameter in signature.parameters.items():
+            properties[parameter_name] = {
+                "type": "string",
+                "description": f"Argument '{parameter_name}' for {name}.",
+            }
+            if parameter.default is inspect.Parameter.empty:
+                required.append(parameter_name)
+
+        return ToolSpec(
+            name=name,
+            description=f"Test tool named {name}.",
+            input_schema={
+                "type": "object",
+                "properties": properties,
+                "required": required,
+                "additionalProperties": False,
+            },
+        )
 
     def get_tools(self):
         return self.tools
+
+    def get_tool_specs(self):
+        return self.specs
 
     def execute(self, tool_name, **arguments):
         self.execute_calls.append((tool_name, arguments))
@@ -87,6 +129,25 @@ def observation_from_prompt(prompt):
         sort_keys=True,
     )
     return observation
+
+
+def catalog_from_prompt(prompt):
+    start = f"{TOOL_CATALOG_START}\n"
+    end = f"\n{TOOL_CATALOG_END}"
+
+    assert prompt.count(TOOL_CATALOG_START) == 1
+    assert prompt.count(TOOL_CATALOG_END) == 1
+
+    catalog_json = prompt.split(start, 1)[1].split(end, 1)[0]
+    catalog = json.loads(catalog_json)
+    assert catalog_json == json.dumps(
+        catalog,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return catalog
 
 
 def normal_data_log_snapshot():
@@ -373,32 +434,128 @@ def test_provider_call_count_is_bounded_by_result(
     assert len(provider.prompts) == expected_provider_calls
 
 
-def test_existing_prompt_and_tool_discovery_behavior_is_preserved():
-    agent, provider, _, _ = create_agent(
-        "Ready.",
-        {
-            "create_character": lambda: None,
-            "load_character": lambda: None,
-        },
-    )
+def test_initial_prompt_contains_complete_catalog_and_response_contract():
+    provider = StubProvider("Ready.")
+    registry = ToolRegistry()
+    agent = ToolAgent(provider, registry)
 
     assert agent.get_available_tools() == ["create_character", "load_character"]
 
     agent.ask("Describe Arven.")
 
-    assert provider.prompts == [
-        """
-You are Dungeon Manager AI.
-
-Available tools:
-['create_character', 'load_character']
-
-User request:
-Describe Arven.
-
-Respond normally.
-"""
+    assert len(provider.prompts) == 1
+    initial_prompt = provider.prompts[0]
+    assert catalog_from_prompt(initial_prompt) == [
+        spec.to_dict()
+        for spec in registry.get_tool_specs()
     ]
+    assert f"{USER_REQUEST_START}\nDescribe Arven.\n{USER_REQUEST_END}" in (
+        initial_prompt
+    )
+    assert "You may request at most one registered tool." in initial_prompt
+    assert (
+        "respond with exactly one JSON object and nothing else"
+        in initial_prompt
+    )
+    assert "Do not add prose or a Markdown code fence" in initial_prompt
+    assert "Use only tool names and argument names from the catalog." in (
+        initial_prompt
+    )
+    assert "Supply every argument listed as required" in initial_prompt
+    assert "Do not invent arguments" in initial_prompt
+    assert (
+        "When no tool is needed, respond with ordinary text instead of "
+        "tool-call JSON."
+    ) in initial_prompt
+
+    example_json = initial_prompt.split(
+        "Canonical tool-call shape:\n",
+        1,
+    )[1].split(f"\n\n{TOOL_CATALOG_START}", 1)[0]
+    assert json.loads(example_json) == {
+        "tool": "create_character",
+        "arguments": {
+            "name": "Arven",
+            "race": "Human",
+            "character_class": "Fighter",
+        },
+    }
+
+
+def test_initial_prompt_is_deterministic_for_same_registry_and_request():
+    provider = StubProvider("Ready.", "Still ready.")
+    agent = ToolAgent(provider, ToolRegistry())
+
+    agent.ask("Describe Arven.")
+    agent.ask("Describe Arven.")
+
+    assert provider.prompts[0] == provider.prompts[1]
+
+
+def test_newly_registered_fake_tool_is_prompted_and_executes_once():
+    calls = []
+    spec = ToolSpec(
+        name="inspect_location",
+        description="Inspect one named location.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "Name of the location to inspect.",
+                    "examples": ["Old Crypt"],
+                },
+            },
+            "required": ["location"],
+            "additionalProperties": False,
+        },
+    )
+
+    def inspect_location(location):
+        calls.append(location)
+        return {"location": location, "danger": "low"}
+
+    registry = ToolRegistry()
+    registry.register(spec, inspect_location)
+    raw_response = json.dumps(
+        {
+            "tool": "inspect_location",
+            "arguments": {"location": "Old Crypt"},
+        }
+    )
+    provider = StubProvider(raw_response, "The Old Crypt appears safe.")
+    agent = ToolAgent(provider, registry)
+    executor = RecordingExecutor(agent.tool_executor)
+    agent.tool_executor = executor
+
+    result = agent.ask("Inspect the Old Crypt.")
+
+    assert result.status is ToolAgentResultStatus.TOOL_EXECUTION
+    assert result.final_response == "The Old Crypt appears safe."
+    assert calls == ["Old Crypt"]
+    assert executor.calls == [
+        ToolCall(
+            tool="inspect_location",
+            arguments={"location": "Old Crypt"},
+        )
+    ]
+    catalog = catalog_from_prompt(provider.prompts[0])
+    assert spec.to_dict() in catalog
+    assert len(provider.prompts) == 2
+
+
+def test_tool_agent_contains_no_character_specific_schema_metadata():
+    source = inspect.getsource(tool_agent_module)
+
+    for character_specific_value in (
+        "create_character",
+        "load_character",
+        "character_class",
+        "Arven",
+        "Human",
+        "Fighter",
+    ):
+        assert character_specific_value not in source
 
 
 def test_initial_provider_error_still_propagates_without_execution():

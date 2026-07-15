@@ -30,7 +30,7 @@ AI Core
 
 
 
-Single-Tool Observation/Response Loop. It is implemented and deterministically
+Tool Schema and Prompt Contract. It is implemented and deterministically
 tested.
 
 
@@ -47,16 +47,22 @@ JSON fences, non-object JSON, and refusal to search prose for embedded JSON.
 arguments, unknown tools, invalid arguments, controlled exceptions, output
 preservation, and confirmation that failures do not retry or invoke another tool.
 
+\- Eighteen focused specification tests cover accurate character-tool schemas,
+required and optional arguments, immutable defensive catalogs, deterministic
+ordering, malformed and duplicate rejection, callable-signature consistency,
+future-tool registration, group-name mismatches, and unsupported callables.
+
 \- An isolated integration test covers `ToolCall` through `ToolRegistry`,
 `CharacterTools`, `CharacterManager`, and temporary JSON storage without touching
 normal project data.
 
-\- The ToolAgent integration has 19 deterministic tests covering ordinary text,
+\- The ToolAgent integration has 22 deterministic tests covering ordinary text,
 malformed requests, valid calls with and without arguments, stable observation
 JSON, unknown tools, invalid arguments, controlled tool failures, domain-level
 failure output, provider call limits, single parsing and execution, final text
 preservation, post-execution provider failure, unsafe output, prompt/tool
-discovery, and the real registry with temporary storage.
+discovery, deterministic catalog prompts, automatic future-tool exposure, and
+the real registry with temporary storage.
 
 \- A valid tool-call attempt produces exactly one delimited, versioned JSON
 observation and one final provider request. JSON-looking final text is not parsed
@@ -66,7 +72,7 @@ or executed.
 completed `ToolExecutionResult`, return controlled typed failures, and never
 retry or execute the tool again.
 
-\- The complete deterministic pytest suite passes 51 tests.
+\- The complete deterministic pytest suite passes 72 tests.
 
 \- The five legacy modules now provide assertion-based pytest coverage for model
 serialization, JSON storage, the campaign manager, character tools, and the tool
@@ -100,6 +106,14 @@ deterministic automated testing.
 
 \- Character create/load tools and a central tool registry
 
+\- Immutable provider-neutral `ToolSpec` metadata for every registered character
+tool, including strict object schemas, described properties, explicit required
+arguments, examples, and rejection of additional properties
+
+\- Registry-time validation that specification names, schema properties,
+required arguments, and callable defaults remain consistent, with immutable
+sorted specification access and defensive JSON catalog copies
+
 \- Backward-compatible dependency injection for campaign and character storage,
 character tools, and the tool registry while preserving production defaults
 
@@ -117,6 +131,10 @@ validates callable arguments, executes once, and preserves normal tool output
 \- A typed, bounded `ToolAgent` integration that preserves one-provider behavior
 for ordinary or malformed responses and performs one parse, one execution, one
 structured observation, and one final provider request for a valid call
+
+\- A deterministic initial prompt contract with a parseable JSON tool catalog,
+delimited user request, generated canonical tool-call example, and explicit
+single-call and ordinary-response rules
 
 \- `ToolAgentResult`, which preserves the raw initial response, parsed call,
 unchanged executor result, and final response, with distinct controlled outcomes
@@ -140,7 +158,7 @@ for unsafe observation serialization and post-execution provider failure
 
 
 
-\- A stable tool schema and initial prompt contract
+\- Local Ollama end-to-end validation of the existing single-tool loop
 
 \- Any later multi-step agent loop
 
@@ -155,6 +173,6 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**Tool Schema and Prompt Contract**. Define stable tool descriptions and the
-initial model-facing prompt contract without starting multi-tool autonomy.
+**Local Ollama End-to-End Tool-Loop Validation**. Validate the existing bounded
+tool loop against the configured local provider without expanding autonomy.
 

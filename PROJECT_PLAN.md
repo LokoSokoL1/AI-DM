@@ -2,7 +2,7 @@
 
 
 
-\## Current Milestone - Single-Tool Observation/Response Loop
+\## Current Milestone - Tool Schema and Prompt Contract
 
 
 
@@ -14,21 +14,22 @@ Scope:
 
 
 
-\- Preserve one-request behavior for ordinary and malformed provider responses
+\- Define immutable provider-neutral specifications for every registered tool
 
-\- Execute one valid parsed tool call exactly once through the existing executor
+\- Keep character tool names, descriptions, argument schemas, and examples close
+to their implementation
 
-\- Send one deterministic structured execution observation to the provider
+\- Reject malformed, duplicate, or callable-inconsistent registrations
 
-\- Preserve the raw initial response, parsed call, unchanged execution result,
-and final provider response in a typed result
+\- Build the initial model prompt from a deterministic JSON tool catalog
 
-\- Handle post-execution serialization and provider failures without retries or
-re-execution
-
+\- Preserve the parser, executor, observation loop, storage defaults, and call
+limits
 
 
-Next milestone: **Tool Schema and Prompt Contract**. It has not started.
+
+Next milestone: **Local Ollama End-to-End Tool-Loop Validation**. It has not
+started.
 
 
 

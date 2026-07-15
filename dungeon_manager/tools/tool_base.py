@@ -12,3 +12,8 @@ class BaseTool:
         """
 
         return {}
+
+    def get_tool_specs(self):
+        """Returns provider-neutral specifications for available functions."""
+
+        return ()

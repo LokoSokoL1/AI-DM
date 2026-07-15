@@ -1,5 +1,53 @@
 from dungeon_manager.managers.character_manager import CharacterManager
 from dungeon_manager.tools.tool_base import BaseTool
+from dungeon_manager.tools.tool_spec import ToolSpec
+
+
+_CREATE_CHARACTER_SPEC = ToolSpec(
+    name="create_character",
+    description="Create and persist a new player character.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Name of the character to create.",
+                "examples": ["Arven"],
+            },
+            "race": {
+                "type": "string",
+                "description": "Race or ancestry of the character.",
+                "default": "",
+                "examples": ["Human"],
+            },
+            "character_class": {
+                "type": "string",
+                "description": "Class of the character.",
+                "default": "",
+                "examples": ["Fighter"],
+            },
+        },
+        "required": ["name"],
+        "additionalProperties": False,
+    },
+)
+
+_LOAD_CHARACTER_SPEC = ToolSpec(
+    name="load_character",
+    description="Load a previously stored character by name.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Name of the character to load.",
+                "examples": ["Arven"],
+            },
+        },
+        "required": ["name"],
+        "additionalProperties": False,
+    },
+)
 
 
 class CharacterTools(BaseTool):
@@ -15,6 +63,12 @@ class CharacterTools(BaseTool):
             "create_character": self.create_character,
             "load_character": self.load_character
         }
+
+    def get_tool_specs(self):
+        return (
+            _CREATE_CHARACTER_SPEC,
+            _LOAD_CHARACTER_SPEC,
+        )
 
     def create_character(
         self,
