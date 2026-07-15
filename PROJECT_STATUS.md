@@ -30,11 +30,12 @@ Game Engine Foundation
 
 
 
-Audited Command Pipeline Integration. The existing policy-gated dispatcher now
-offers private synchronous lifecycle observations to an optional audited
-wrapper, which records safe ordered command traces without changing policy,
-approval, gate, replay, engine, handler, ToolAgent, manager, storage, Ollama, or
-Foundry behavior. No game events are produced.
+Event-Producing Command Handler Contract. Successful handlers may now return an
+ordered immutable tuple of `GameEvent` world facts on the existing `GameResult`.
+The engine validates exact originating-command linkage, event structure, and
+per-result event-ID uniqueness without repairing or publishing records. Policy,
+approval, replay, audit, ToolAgent, manager, storage, Ollama, and Foundry
+behavior remains unchanged.
 
 
 
@@ -193,6 +194,20 @@ pipeline and its dependency boundary were added.
 \- The complete deterministic pytest suite passes 292 tests after the Audited
 Command Pipeline Integration milestone was added.
 
+\- The focused event-producing handler module passes 26 tests covering legacy
+empty results, one and multiple ordered events, immutability, defensive
+serialization, invalid collections and event values, linkage and duplicate-ID
+validation, engine failure isolation, policy-blocked paths, automatic and
+approved preservation, duplicate suppression, audited preservation,
+post-dispatch audit failure, sanitized audit details, and confirmation that no
+event-journal append occurs.
+
+\- The complete focused engine suite passes 245 tests after the event-producing
+handler result contract was added.
+
+\- The complete deterministic pytest suite passes 319 tests after the
+Event-Producing Command Handler Contract milestone was added.
+
 
 
 \## Implemented Functionality
@@ -324,6 +339,15 @@ post-dispatch failure, and controlled integration outcomes
 boundary, plus post-dispatch result/replay preservation with no retry; both
 audit journals and replay state remain in-memory and non-durable
 
+\- An additive `GameResult.events` contract that defaults to an empty tuple,
+preserves valid `GameEvent` objects in handler order, validates exact
+originating-command linkage and unique per-result event IDs, serializes
+defensively, and keeps all controlled engine failures event-free
+
+\- Unchanged preservation of valid handler-produced events through the game
+engine, automatic or approved policy-gated dispatch, audited dispatch, and
+post-dispatch audit failure without appending to `GameEventJournal`
+
 
 
 \## Partially Implemented Functionality
@@ -343,9 +367,9 @@ model behavior remains nondeterministic and intentionally outside normal tests
 
 
 
-\- Event-producing command-handler contracts that create true world facts only
-after appropriate successful domain handling; this milestone does not yet emit
-events
+\- Event Journal Publication Integration that explicitly appends validated
+handler-produced events after successful dispatch; the current milestone only
+returns events and does not publish or persist them
 
 \- Durable, tamper-evident event and audit storage plus any restart-safe replay
 protection; the current journals are in-memory only
@@ -363,8 +387,8 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**Event-Producing Command Handler Contract**. Define how successful command
-handlers return true world facts for later journal append without changing
-policy, approval, replay, audit, persistence, gameplay rules, Foundry
-integration, or unrelated systems.
+**Event Journal Publication Integration**. Append validated handler-produced
+events to the existing `GameEventJournal` at the correct successful dispatch
+boundary without starting persistence, projection, transactions, subscribers,
+queues, retries, gameplay rules, Foundry integration, or unrelated systems.
 

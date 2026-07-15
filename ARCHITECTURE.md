@@ -550,17 +550,28 @@ statuses are:
 
 Successful results cannot carry errors. Every non-success result requires
 non-empty safe caller-facing error text and cannot carry output. Nested output
-is immutable, while `to_dict()` returns an independent JSON-compatible copy.
+is immutable. Successful results also contain an ordered immutable tuple of
+zero or more `GameEvent` records, defaulting to empty. The tuple preserves the
+handler's exact event objects and order; it does not generate, repair, replace,
+reorder, deduplicate, publish, or persist them. Every event is structurally
+revalidated, must link to the result command ID through
+`originating_command_id`, and must have an event ID unique within that result.
+Event provenance and actor identity remain independent from command provenance
+and actor identity. Non-success results cannot contain events. `to_dict()`
+returns independent JSON-compatible output and event data.
 
 `GameEngine` registers one synchronous handler for each exact command type.
 Registration rejects invalid types, non-callable or incorrectly shaped
 handlers, and duplicates. Dispatch revalidates the command, looks up one exact
 type, and invokes at most one handler exactly once. It does not retry or fall
 through to another handler. Missing handlers and invalid handler results become
-controlled results. Raised exceptions are logged with internal details and
-converted to safe caller-facing failures without tracebacks or raw exception
-text. Only test handlers exist in this milestone; current tools and managers do
-not dispatch through this engine yet.
+controlled results. Structurally invalid event collections, non-event values,
+mismatched command linkage, duplicate event IDs, and corrupted events are
+controlled `INVALID_HANDLER_RESULT` outcomes with no events. Raised exceptions
+are logged with internal details and converted to safe caller-facing failures
+without tracebacks, raw exception text, or event payloads. Only test handlers
+exist in this milestone; current tools and managers do not dispatch through
+this engine yet.
 
 
 ## Trust and Optional Automation Boundary
@@ -675,11 +686,14 @@ The engine boundary now distinguishes five related concepts:
 - A `GameEvent` records a fact that occurred in the game world.
 - A `CommandAuditRecord` explains one decision or execution stage.
 
-Denied, suggested, awaiting, invalid, failed, or merely proposed commands may
-produce audit records after a future integration milestone, but they must not
-produce game events claiming that a world change occurred. Neither record type
-executes behavior, changes world state, dispatches, or accesses handlers,
-managers, storage, AI, tools, rules, Foundry, or the live command pipeline.
+Denied, suggested, awaiting, duplicate, or merely proposed commands may produce
+audit records, but they do not invoke a handler and cannot produce game events
+claiming that a world change occurred. Invalid and failed engine results also
+cannot carry events. A successfully handled command may now return true world
+facts through `GameResult.events`; the result contract alone does not publish
+them. Neither record type executes behavior, changes world state, dispatches,
+or accesses handlers, managers, storage, AI, tools, rules, Foundry, or the live
+command pipeline.
 
 `GameEvent` is immutable data with a generated or explicit stable event ID, an
 exact case-sensitive event type, positive schema version, deeply immutable
@@ -753,9 +767,11 @@ identity are linked without assigning roles or authority.
 `PolicyGatedDispatchResult` when one exists, returns an immutable tuple of the
 journal entries appended for that submission, serializes defensively, and
 distinguishes completed auditing, pre-dispatch audit failure, post-dispatch
-audit failure, and a controlled integration failure. Record IDs and UTC times
-come from injectable synchronous factories; production defaults use UUIDs and
-the existing UTC clock boundary.
+audit failure, and a controlled integration failure. Any valid produced events
+remain the exact ordered tuple on the preserved `GameResult`, including after a
+post-dispatch audit failure. Event payloads are not copied into audit details.
+Record IDs and UTC times come from injectable synchronous factories;
+production defaults use UUIDs and the existing UTC clock boundary.
 
 The audit-failure boundary is the engine call. Every required pre-dispatch
 append, including `DISPATCH_ATTEMPTED`, must succeed before replay is consumed

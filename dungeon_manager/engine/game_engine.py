@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 from ._json import validate_trimmed_identifier
 from .command import GameCommand
-from .result import GameResult
+from .result import GameResult, GameResultValidationError
 
 
 logger = logging.getLogger("DungeonManager")
@@ -104,6 +104,17 @@ class GameEngine:
 
         try:
             result = handler(command)
+        except GameResultValidationError:
+            logger.exception(
+                "Game command handler constructed an invalid result for %s "
+                "(command_id=%s)",
+                command.command_type,
+                command.command_id,
+            )
+            return GameResult.invalid_handler_result(
+                command_id=command.command_id,
+                error=_INVALID_HANDLER_RESULT_ERROR,
+            )
         except Exception:
             logger.exception(
                 "Game command handler failed for %s (command_id=%s)",

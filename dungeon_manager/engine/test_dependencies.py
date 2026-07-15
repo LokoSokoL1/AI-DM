@@ -96,6 +96,32 @@ def test_event_and_audit_foundations_have_only_data_boundary_dependencies():
         assert relative_imports == expected
 
 
+def test_event_producing_result_uses_only_existing_engine_data_boundaries():
+    package_root = Path(__file__).resolve().parent
+    expected_relative_imports = {
+        "result.py": {"_json", "game_event"},
+        "game_engine.py": {"_json", "command", "result"},
+    }
+
+    for filename, expected in expected_relative_imports.items():
+        path = package_root / filename
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        relative_imports = {
+            node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.level > 0
+        }
+        accessed_names = {
+            node.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Name)
+        }
+
+        assert relative_imports == expected
+        assert "GameEventJournal" not in accessed_names
+        assert "CommandAuditJournal" not in accessed_names
+
+
 def test_audited_pipeline_uses_only_existing_engine_and_audit_boundaries():
     path = Path(__file__).resolve().parent / "audited_pipeline.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))

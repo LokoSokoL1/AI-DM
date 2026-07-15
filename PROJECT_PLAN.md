@@ -2,7 +2,7 @@
 
 
 
-\## Current Milestone - Audited Command Pipeline Integration
+\## Current Milestone - Event-Producing Command Handler Contract
 
 
 
@@ -14,30 +14,29 @@ Scope:
 
 
 
-\- Add an optional synchronous `AuditedCommandPipeline` around the existing
-policy-gated dispatcher without duplicating policy, approval, gate, replay, or
-engine-dispatch behavior
+\- Extend the existing immutable `GameResult` with an ordered immutable tuple
+of zero or more `GameEvent` records that defaults to empty
 
-\- Append safe typed audit records for proposal, policy, applicable approval,
-gate, blocked or attempted dispatch, completion, and coordinator failure
+\- Validate every produced event without repairing command linkage, replacing
+objects, reordering events, or removing duplicate IDs
 
-\- Add an immutable audited result that preserves the authoritative
-`PolicyGatedDispatchResult`, immutable journal-entry references, audit status,
-and safe failure text
+\- Convert invalid event collections, non-event values, mismatched originating
+command IDs, duplicate event IDs, and corrupted events into the existing safe
+`INVALID_HANDLER_RESULT`
 
-\- Fail closed before the engine boundary when a required audit append fails;
-after the boundary, preserve the result and replay consumption without retry
+\- Preserve valid event tuples unchanged through `GameEngine`, policy-gated
+dispatch, audited dispatch, post-dispatch audit failure, and defensive
+serialization
 
-\- Keep unaudited coordinator behavior backward compatible and produce no
-`GameEvent` records
+\- Keep blocked paths event-free and leave `GameEventJournal` append,
+publication, persistence, projection, transactions, and subscribers outside
+this milestone
 
 
-Audit and replay state remain process-local and in-memory. They are not durable,
-tamper-evident, restart-safe, transactional, or integrated with world-state
-projection.
+Only test handlers produce events. Current tools, managers, AI routing, rules,
+storage, UI, and Foundry behavior remain unchanged.
 
-Next milestone: **Event-Producing Command Handler Contract**. It has not
-started.
+Next milestone: **Event Journal Publication Integration**. It has not started.
 
 
 

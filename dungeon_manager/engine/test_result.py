@@ -58,6 +58,7 @@ def test_result_serialization_is_json_compatible_and_independent():
     assert fresh == {
         "command_id": "command-result-003",
         "error": None,
+        "events": [],
         "output": {"events": [{"type": "test-only"}]},
         "status": "success",
     }
