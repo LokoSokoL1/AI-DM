@@ -518,6 +518,71 @@ This prevents:
 The AI acts as a decision layer, while Dungeon Manager controls execution.
 
 
+## Game Command and Dispatch Boundary
+
+`dungeon_manager.engine` is the provider-independent entry boundary for future
+game-engine actions. It uses only the Python standard library and has no direct
+dependency on AI providers, tools, managers, storage, rules, Foundry, or the
+current character-tool path.
+
+`GameCommand` is an immutable intention. It carries a generated or explicitly
+supplied stable command ID, an exact command type, a deeply immutable
+JSON-compatible object payload, immutable provenance, and an optional actor ID.
+It contains no business logic and cannot execute itself. Provenance records the
+initiator source (`human`, `ai`, `system`, or `external`) and may identify the
+specific initiator. The actor ID separately identifies who or what that
+initiator is acting as; it does not define a role or grant permission. Commands
+have no timestamp or correlation fields because the current architecture does
+not yet require them. `to_dict()` returns an independent JSON-compatible copy
+for future logging, transport, or persistence.
+
+`GameResult` is immutable and linked to the originating command ID. Its current
+statuses are:
+
+- `SUCCESS`: one handler returned a structurally valid result. This describes
+  handling, so output may still contain a normal domain-level negative outcome.
+- `UNKNOWN_COMMAND`: no exact handler registration exists.
+- `INVALID_COMMAND`: a command fails structural revalidation before handling.
+- `INVALID_HANDLER_RESULT`: a handler returns the wrong type, an invalid result,
+  or a result linked to a different command ID.
+- `HANDLER_FAILURE`: the selected handler raises an exception, or a handler
+  deliberately returns a safe controlled failure.
+
+Successful results cannot carry errors. Every non-success result requires
+non-empty safe caller-facing error text and cannot carry output. Nested output
+is immutable, while `to_dict()` returns an independent JSON-compatible copy.
+
+`GameEngine` registers one synchronous handler for each exact command type.
+Registration rejects invalid types, non-callable or incorrectly shaped
+handlers, and duplicates. Dispatch revalidates the command, looks up one exact
+type, and invokes at most one handler exactly once. It does not retry or fall
+through to another handler. Missing handlers and invalid handler results become
+controlled results. Raised exceptions are logged with internal details and
+converted to safe caller-facing failures without tracebacks or raw exception
+text. Only test handlers exist in this milestone; current tools and managers do
+not dispatch through this engine yet.
+
+
+## Trust and Optional Automation Boundary
+
+The intended future action flow is:
+
+**intention → automation policy → suggest/confirm/execute/deny → game command dispatch → result/event**
+
+The automation policy and event boundary are not implemented in the current
+milestone. Command creation is not authorization, dispatch contains no approval
+decision, and an AI-created command is not automatically trusted. Provenance is
+preserved so the future policy can distinguish initiators without confusing
+identity with actor roles or permissions.
+
+Automation will be optional and configurable per capability. Global trust
+levels will be convenience presets only, not a replacement for capability-level
+configuration. The governing principle is that AI earns trust through observed
+behavior; it does not receive blanket authority merely because it generated an
+intention. Approval decisions, roles, permissions, events, and event persistence
+remain future boundaries outside `GameEngine`.
+
+
 ## Tool Call Parsing Boundary
 
 The Tool Call Parser is a standalone part of the AI layer. It inspects one

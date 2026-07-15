@@ -4,7 +4,7 @@
 
 \## Current Phase
 
-AI Core
+Game Engine Foundation
 
 
 
@@ -30,8 +30,9 @@ AI Core
 
 
 
-Local Ollama End-to-End Tool-Loop Validation. It is implemented and validated
-against the configured local provider and model.
+Game Engine Foundation: Commands and Results. It is implemented and
+deterministically validated without changing the existing ToolAgent, manager,
+storage, Ollama, or Foundry paths.
 
 
 
@@ -110,6 +111,26 @@ temporary directory was removed after the run.
 guard and its isolated real-component wiring. The complete deterministic suite
 passes 74 tests.
 
+\- The Game Engine Foundation started from a clean 74-test deterministic
+baseline at the expected commit.
+
+\- The focused engine suite passes 58 tests covering command construction and
+IDs, all provenance sources, actor separation, nested immutability, defensive
+serialization, invalid structures, result invariants, successful and unknown
+dispatch, exact handler resolution, registration validation, single invocation,
+no retry, exception conversion, invalid or mismatched handler results, immutable
+registration snapshots, and dependency isolation.
+
+\- The complete deterministic pytest suite passes 132 tests after the engine
+foundation was added.
+
+\- The five isolated legacy smoke modules still pass through direct `python -m`
+execution using only temporary storage.
+
+\- Before/after paths, sizes, modification times, and SHA-256 hashes confirm
+that the milestone's focused tests, complete deterministic suite, and legacy
+smoke modules leave normal `data/` and `logs/` unchanged.
+
 
 
 \## Implemented Functionality
@@ -169,6 +190,22 @@ retries
 \- The legacy Ollama smoke-module command now delegates to the guarded live
 validator and cannot use normal project storage as an alternate path
 
+\- A standard-library-only `dungeon_manager.engine` package with immutable
+`GameCommand`, `CommandProvenance`, `CommandSource`, `GameResult`, and
+`GameResultStatus` representations
+
+\- Deeply immutable JSON-compatible command payloads and result output with
+independent transport/logging dictionaries
+
+\- A synchronous `GameEngine` that validates exact handler registrations,
+exposes an immutable sorted command-type snapshot, dispatches one handler once,
+and converts unknown commands, invalid handler results, and raised exceptions
+to controlled linked results
+
+\- A documented future trust boundary in which per-capability optional
+automation evaluates provenance before dispatch; global trust levels are presets
+only, command creation is not authorization, and AI must earn trust
+
 
 
 \## Partially Implemented Functionality
@@ -188,6 +225,9 @@ model behavior remains nondeterministic and intentionally outside normal tests
 
 
 
+\- Automation policy and approval decisions, including per-capability
+suggest/confirm/execute/deny configuration
+
 \- Any later multi-step agent loop
 
 \- Prompt management and context handling beyond current prompt construction
@@ -201,7 +241,7 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**Game Engine Foundation: Commands and Results**. Define the provider-neutral
-command and result boundary for deterministic game-engine work without starting
-broader rules-system functionality.
+**Automation Policy and Approval Decisions**. Define optional per-capability
+suggest/confirm/execute/deny decisions before game-command dispatch without
+starting game rules, events, or Foundry integration.
 

@@ -2,11 +2,11 @@
 
 
 
-\## Current Milestone - Local Ollama End-to-End Tool-Loop Validation
+\## Current Milestone - Game Engine Foundation: Commands and Results
 
 
 
-Status: Implemented and validated against the configured local Ollama model.
+Status: Implemented and deterministically validated.
 
 
 
@@ -14,24 +14,26 @@ Scope:
 
 
 
-\- Keep live validation deliberately opt-in and outside the deterministic suite
+\- Add immutable provider-independent game commands with stable IDs, deeply
+immutable JSON-compatible payloads, provenance, and optional actor identity
 
-\- Use the configured Ollama provider and model through the real bounded
-`ToolAgent` loop
+\- Add immutable linked game results with explicit success, unknown-command,
+invalid-command, invalid-handler-result, and controlled-failure statuses
 
-\- Exercise ordinary response, character creation, existing-character load, and
-missing-character load scenarios exactly once per live run
+\- Add exact synchronous handler registration and one-attempt dispatch without
+retries, fallback handlers, approval decisions, or game rules
 
-\- Inject temporary JSON storage and avoid normal project data and logs
+\- Preserve initiator provenance for a future optional capability-level
+automation policy without treating command creation as authorization
 
-\- Report initial/final model responses, classifications, execution results,
-call counts, storage snapshots, and failure reasons as structured JSON
+\- Keep the existing ToolAgent, tools, managers, storage, Ollama validation, and
+Foundry paths unchanged
 
 
-The first live run passed all four required scenarios using `qwen2.5:32b`
-without a prompt correction or rerun.
+Only test handlers exist in this milestone. No character, combat, dice,
+campaign, approval, event, or Foundry command has been introduced.
 
-Next milestone: **Game Engine Foundation: Commands and Results**. It has not
+Next milestone: **Automation Policy and Approval Decisions**. It has not
 started.
 
 
