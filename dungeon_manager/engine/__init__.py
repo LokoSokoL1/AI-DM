@@ -6,6 +6,7 @@ from .audited_pipeline import (
     AuditedCommandPipeline,
     AuditedCommandPipelineResult,
     AuditIntegrationStatus,
+    EventPublicationDisposition,
 )
 
 from .automation import (
@@ -53,6 +54,7 @@ __all__ = [
     "CommandAuditRecord",
     "CommandProvenance",
     "CommandSource",
+    "EventPublicationDisposition",
     "GameCommand",
     "GameEngine",
     "GameEvent",

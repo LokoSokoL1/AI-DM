@@ -1,5 +1,6 @@
 """Separate process-local append-only game-event and command-audit journals."""
 
+from collections.abc import Iterable, Mapping, Set as AbstractSet
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any, Optional
@@ -74,20 +75,67 @@ class GameEventJournal:
 
         if not isinstance(event, GameEvent):
             raise TypeError("GameEventJournal.append requires a GameEvent.")
-        event.validate()
+        return self.append_batch((event,))[0]
+
+    def append_batch(
+        self,
+        events: Iterable[GameEvent],
+    ) -> tuple[GameEventJournalEntry, ...]:
+        """Atomically append one complete ordered batch of unique events."""
+
+        if (
+            isinstance(
+                events,
+                (str, bytes, bytearray, Mapping, AbstractSet),
+            )
+            or not isinstance(events, Iterable)
+        ):
+            raise TypeError(
+                "GameEventJournal.append_batch requires an ordered "
+                "collection of GameEvent values."
+            )
+
+        batch = tuple(events)
+        batch_ids: set[str] = set()
+        for event in batch:
+            if not isinstance(event, GameEvent):
+                raise TypeError(
+                    "GameEventJournal.append_batch requires only GameEvent "
+                    "values."
+                )
+            event.validate()
+            if event.event_id in batch_ids:
+                raise ValueError(
+                    f"Duplicate game event ID in batch: {event.event_id}"
+                )
+            batch_ids.add(event.event_id)
+
+        if not batch:
+            return ()
 
         with self.__lock:
-            if event.event_id in self.__event_ids:
-                raise ValueError(f"Duplicate game event ID: {event.event_id}")
-            entry = GameEventJournalEntry(
-                sequence=len(self.__entries) + 1,
-                event=event,
+            existing_duplicates = batch_ids & self.__event_ids
+            if existing_duplicates:
+                duplicate_id = next(
+                    event.event_id
+                    for event in batch
+                    if event.event_id in existing_duplicates
+                )
+                raise ValueError(f"Duplicate game event ID: {duplicate_id}")
+
+            first_sequence = len(self.__entries) + 1
+            entries = tuple(
+                GameEventJournalEntry(
+                    sequence=first_sequence + offset,
+                    event=event,
+                )
+                for offset, event in enumerate(batch)
             )
-            updated_entries = self.__entries + (entry,)
-            updated_ids = self.__event_ids | {event.event_id}
+            updated_entries = self.__entries + entries
+            updated_ids = self.__event_ids | batch_ids
             self.__entries = updated_entries
             self.__event_ids = updated_ids
-            return entry
+            return entries
 
     def filter(
         self,

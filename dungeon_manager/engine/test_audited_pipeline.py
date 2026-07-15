@@ -9,6 +9,7 @@ from .audit import AuditStage
 from .audited_pipeline import (
     AuditedCommandPipeline,
     AuditIntegrationStatus,
+    EventPublicationDisposition,
 )
 from .automation import (
     ApprovalOutcome,
@@ -69,6 +70,7 @@ def build_pipeline(
     handler=None,
     register_handler=True,
     journal=None,
+    event_journal=None,
     audit_record_id_factory=None,
     clock=None,
     engine=None,
@@ -101,9 +103,13 @@ def build_pipeline(
     selected_journal = (
         CommandAuditJournal() if journal is None else journal
     )
+    selected_event_journal = (
+        GameEventJournal() if event_journal is None else event_journal
+    )
     pipeline = AuditedCommandPipeline(
         dispatcher,
         selected_journal,
+        selected_event_journal,
         audit_record_id_factory=(
             sequential_ids()
             if audit_record_id_factory is None
@@ -568,6 +574,7 @@ def test_unexpected_integration_failure_is_controlled_and_sanitized():
     pipeline = AuditedCommandPipeline(
         dispatcher,
         journal,
+        GameEventJournal(),
         audit_record_id_factory=sequential_ids(),
         clock=lambda: FIXED_UTC,
     )
@@ -612,14 +619,19 @@ def test_returned_entries_and_serialization_cannot_mutate_journal_state():
 
 def test_audited_pipeline_produces_no_game_events():
     event_journal = GameEventJournal()
-    pipeline, _, audit_journal, _ = build_pipeline()
+    pipeline, _, audit_journal, _ = build_pipeline(
+        event_journal=event_journal
+    )
 
     result = pipeline.dispatch(make_command())
 
     assert result.audit_status is AuditIntegrationStatus.COMPLETED
+    assert result.publication_disposition is (
+        EventPublicationDisposition.NO_EVENTS
+    )
     assert audit_journal.entries
     assert event_journal.entries == ()
-    assert "event" not in result.to_dict()
+    assert result.published_event_entries == ()
 
 
 def test_existing_unaudited_dispatch_remains_compatible_and_writes_no_audit():

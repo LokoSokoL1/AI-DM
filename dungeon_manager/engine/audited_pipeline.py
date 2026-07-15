@@ -18,10 +18,16 @@ from .automation import (
     PolicyDecision,
 )
 from .command import GameCommand
-from .journals import CommandAuditJournal, CommandAuditJournalEntry
+from .journals import (
+    CommandAuditJournal,
+    CommandAuditJournalEntry,
+    GameEventJournal,
+    GameEventJournalEntry,
+)
 from .policy_gated_dispatcher import (
     PolicyGatedCommandDispatcher,
     PolicyGatedDispatchResult,
+    PolicyGatedDispatchStatus,
 )
 
 
@@ -37,6 +43,10 @@ _PRE_DISPATCH_AUDIT_ERROR = (
 _POST_DISPATCH_AUDIT_ERROR = (
     "Audit recording failed after engine dispatch; the command was not "
     "retried."
+)
+_EVENT_PUBLICATION_ERROR = (
+    "Event publication failed after engine dispatch; the command and event "
+    "batch were not retried."
 )
 _INTEGRATION_ERROR = "The audited command pipeline failed safely."
 
@@ -60,17 +70,31 @@ class AuditIntegrationStatus(str, Enum):
     CONTROLLED_INTEGRATION_FAILURE = "controlled_integration_failure"
 
 
+class EventPublicationDisposition(str, Enum):
+    """Outcome of event publication for one audited command submission."""
+
+    NOT_APPLICABLE = "not_applicable"
+    NO_EVENTS = "no_events"
+    PUBLISHED = "published"
+    FAILED = "failed"
+
+
 @dataclass(frozen=True)
 class AuditedCommandPipelineResult:
     """Immutable audit outcome preserving any authoritative dispatch result."""
 
     command_id: str
     audit_status: AuditIntegrationStatus
+    publication_disposition: EventPublicationDisposition
     policy_gated_result: Optional[PolicyGatedDispatchResult] = None
     audit_entries: tuple[CommandAuditJournalEntry, ...] = field(
         default_factory=tuple
     )
+    published_event_entries: tuple[GameEventJournalEntry, ...] = field(
+        default_factory=tuple
+    )
     error: Optional[str] = None
+    publication_error: Optional[str] = None
 
     def __post_init__(self) -> None:
         validate_trimmed_identifier(
@@ -81,6 +105,14 @@ class AuditedCommandPipelineResult:
             raise ValueError(
                 "Audit integration status must be an "
                 "AuditIntegrationStatus value."
+            )
+        if not isinstance(
+            self.publication_disposition,
+            EventPublicationDisposition,
+        ):
+            raise ValueError(
+                "Event publication disposition must be an "
+                "EventPublicationDisposition value."
             )
 
         if self.policy_gated_result is not None:
@@ -116,6 +148,27 @@ class AuditedCommandPipelineResult:
                     "Audited pipeline entries must match the command ID."
                 )
         object.__setattr__(self, "audit_entries", entries)
+
+        try:
+            published_entries = tuple(self.published_event_entries)
+        except TypeError as error:
+            raise ValueError(
+                "Published event entries must be an iterable snapshot."
+            ) from error
+        for entry in published_entries:
+            if not isinstance(entry, GameEventJournalEntry):
+                raise ValueError(
+                    "Published event entries must contain game-event journal "
+                    "entries."
+                )
+            entry.event.validate()
+        object.__setattr__(
+            self,
+            "published_event_entries",
+            published_entries,
+        )
+
+        self._validate_publication()
 
         if self.audit_status is AuditIntegrationStatus.COMPLETED:
             if self.policy_gated_result is None:
@@ -165,6 +218,11 @@ class AuditedCommandPipelineResult:
             "audit_status": self.audit_status.value,
             "command_id": self.command_id,
             "error": self.error,
+            "publication_disposition": self.publication_disposition.value,
+            "publication_error": self.publication_error,
+            "published_event_entries": [
+                entry.to_dict() for entry in self.published_event_entries
+            ],
             "policy_gated_result": (
                 None
                 if self.policy_gated_result is None
@@ -172,9 +230,119 @@ class AuditedCommandPipelineResult:
             ),
         }
 
+    def _validate_publication(self) -> None:
+        dispatched_result = None
+        if (
+            self.policy_gated_result is not None
+            and self.policy_gated_result.status
+            is PolicyGatedDispatchStatus.DISPATCHED
+        ):
+            dispatched_result = self.policy_gated_result.game_result
+
+        if (
+            self.publication_disposition
+            is EventPublicationDisposition.NOT_APPLICABLE
+        ):
+            if dispatched_result is not None:
+                raise ValueError(
+                    "Dispatched results require an applicable publication "
+                    "disposition."
+                )
+            if self.published_event_entries or self.publication_error is not None:
+                raise ValueError(
+                    "Non-applicable publication cannot contain entries or an "
+                    "error."
+                )
+            return
+
+        if dispatched_result is None:
+            raise ValueError(
+                "Applicable event publication requires a dispatched result."
+            )
+
+        events = dispatched_result.events
+        if (
+            self.publication_disposition
+            is EventPublicationDisposition.NO_EVENTS
+        ):
+            if events:
+                raise ValueError(
+                    "No-events publication requires an empty event result."
+                )
+            if self.published_event_entries or self.publication_error is not None:
+                raise ValueError(
+                    "No-events publication cannot contain entries or an error."
+                )
+            return
+
+        if not events:
+            raise ValueError(
+                "Published or failed event publication requires result events."
+            )
+
+        if (
+            self.publication_disposition
+            is EventPublicationDisposition.PUBLISHED
+        ):
+            if self.publication_error is not None:
+                raise ValueError(
+                    "Successful event publication must not contain an error."
+                )
+            if len(self.published_event_entries) != len(events):
+                raise ValueError(
+                    "Published event entries must match the complete event "
+                    "batch."
+                )
+            if any(
+                entry.event is not event
+                for entry, event in zip(
+                    self.published_event_entries,
+                    events,
+                )
+            ):
+                raise ValueError(
+                    "Published event entries must preserve the result events "
+                    "in order."
+                )
+            first_sequence = self.published_event_entries[0].sequence
+            if tuple(
+                entry.sequence for entry in self.published_event_entries
+            ) != tuple(
+                range(first_sequence, first_sequence + len(events))
+            ):
+                raise ValueError(
+                    "Published event entries must have contiguous sequences."
+                )
+            return
+
+        if self.publication_disposition is EventPublicationDisposition.FAILED:
+            if self.published_event_entries:
+                raise ValueError(
+                    "Failed event publication cannot contain appended entries."
+                )
+            validate_trimmed_identifier(
+                self.publication_error,
+                "Event publication error",
+            )
+            if (
+                self.audit_status
+                is not AuditIntegrationStatus.POST_DISPATCH_AUDIT_FAILURE
+            ):
+                raise ValueError(
+                    "Failed event publication uses the post-dispatch failure "
+                    "classification."
+                )
+            return
+
+        raise ValueError("Unsupported event publication disposition.")
+
 
 class _AuditAppendFailure(Exception):
     """Internal signal that one required audit append failed."""
+
+
+class _EventPublicationFailure(Exception):
+    """Internal signal that one atomic event batch publication failed."""
 
 
 class _AuditedLifecycleRecorder:
@@ -184,14 +352,24 @@ class _AuditedLifecycleRecorder:
         self,
         command: GameCommand,
         journal: CommandAuditJournal,
+        event_journal: GameEventJournal,
         audit_record_id_factory: AuditRecordIdFactory,
         clock: UtcClock,
     ) -> None:
         self._command = command
         self._journal = journal
+        self._event_journal = event_journal
         self._audit_record_id_factory = audit_record_id_factory
         self._clock = clock
         self._entries: tuple[CommandAuditJournalEntry, ...] = ()
+        self._published_event_entries: tuple[
+            GameEventJournalEntry,
+            ...,
+        ] = ()
+        self._publication_disposition = (
+            EventPublicationDisposition.NOT_APPLICABLE
+        )
+        self._publication_error: Optional[str] = None
         self._dispatch_result: Optional[PolicyGatedDispatchResult] = None
         self._engine_boundary_crossed = False
 
@@ -202,6 +380,18 @@ class _AuditedLifecycleRecorder:
     @property
     def dispatch_result(self) -> Optional[PolicyGatedDispatchResult]:
         return self._dispatch_result
+
+    @property
+    def publication_disposition(self) -> EventPublicationDisposition:
+        return self._publication_disposition
+
+    @property
+    def published_event_entries(self) -> tuple[GameEventJournalEntry, ...]:
+        return self._published_event_entries
+
+    @property
+    def publication_error(self) -> Optional[str]:
+        return self._publication_error
 
     @property
     def engine_boundary_crossed(self) -> bool:
@@ -287,6 +477,15 @@ class _AuditedLifecycleRecorder:
         game_result = result.game_result
         if game_result is None:
             raise _AuditAppendFailure from None
+
+        events = game_result.events
+        if not events:
+            self._publication_disposition = (
+                EventPublicationDisposition.NO_EVENTS
+            )
+        else:
+            self._publish_event_batch(events)
+
         self._append(
             AuditStage.DISPATCH_COMPLETED,
             game_result.status.value,
@@ -295,6 +494,55 @@ class _AuditedLifecycleRecorder:
                 "gated_dispatch_status": result.status.value,
             },
         )
+
+    def _publish_event_batch(self, events: tuple[Any, ...]) -> None:
+        try:
+            entries = self._event_journal.append_batch(events)
+            if not isinstance(entries, tuple):
+                raise ValueError(
+                    "Game event journal returned a mutable batch snapshot."
+                )
+            if len(entries) != len(events):
+                raise ValueError(
+                    "Game event journal returned an incomplete batch snapshot."
+                )
+            for entry, event in zip(entries, events):
+                if (
+                    not isinstance(entry, GameEventJournalEntry)
+                    or entry.event is not event
+                ):
+                    raise ValueError(
+                        "Game event journal returned an invalid batch entry."
+                    )
+        except Exception:
+            logger.error(
+                "Required game event publication failed safely "
+                "(command_id=%s, event_count=%s)",
+                self._command.command_id,
+                len(events),
+            )
+            self._publication_disposition = (
+                EventPublicationDisposition.FAILED
+            )
+            self._publication_error = _EVENT_PUBLICATION_ERROR
+            try:
+                self._append(
+                    AuditStage.COORDINATOR_FAILURE,
+                    "event_publication_failed",
+                    {
+                        "event_count": len(events),
+                        "phase": "event_publication",
+                        "publication_disposition": (
+                            EventPublicationDisposition.FAILED.value
+                        ),
+                    },
+                )
+            except _AuditAppendFailure:
+                pass
+            raise _EventPublicationFailure from None
+
+        self._published_event_entries = entries
+        self._publication_disposition = EventPublicationDisposition.PUBLISHED
 
     def coordinator_failed(
         self,
@@ -392,6 +640,7 @@ class AuditedCommandPipeline:
         self,
         dispatcher: PolicyGatedCommandDispatcher,
         audit_journal: CommandAuditJournal,
+        event_journal: GameEventJournal,
         *,
         audit_record_id_factory: AuditRecordIdFactory = (
             _generate_audit_record_id
@@ -406,6 +655,10 @@ class AuditedCommandPipeline:
             raise ValueError(
                 "Audited command pipeline requires a command audit journal."
             )
+        if not isinstance(event_journal, GameEventJournal):
+            raise ValueError(
+                "Audited command pipeline requires a game event journal."
+            )
         if not callable(audit_record_id_factory):
             raise ValueError("Audit record ID factory must be callable.")
         if not callable(clock):
@@ -413,6 +666,7 @@ class AuditedCommandPipeline:
 
         self._dispatcher = dispatcher
         self._audit_journal = audit_journal
+        self._event_journal = event_journal
         self._audit_record_id_factory = audit_record_id_factory
         self._clock = clock
 
@@ -431,6 +685,7 @@ class AuditedCommandPipeline:
         recorder = _AuditedLifecycleRecorder(
             command,
             self._audit_journal,
+            self._event_journal,
             self._audit_record_id_factory,
             self._clock,
         )
@@ -441,6 +696,23 @@ class AuditedCommandPipeline:
                 command,
                 approval,
                 recorder,
+            )
+        except _EventPublicationFailure:
+            return AuditedCommandPipelineResult(
+                command_id=command.command_id,
+                audit_status=(
+                    AuditIntegrationStatus.POST_DISPATCH_AUDIT_FAILURE
+                ),
+                publication_disposition=(
+                    recorder.publication_disposition
+                ),
+                policy_gated_result=recorder.dispatch_result,
+                audit_entries=recorder.entries,
+                published_event_entries=(
+                    recorder.published_event_entries
+                ),
+                error=_EVENT_PUBLICATION_ERROR,
+                publication_error=recorder.publication_error,
             )
         except _AuditAppendFailure:
             status = (
@@ -456,9 +728,16 @@ class AuditedCommandPipeline:
             return AuditedCommandPipelineResult(
                 command_id=command.command_id,
                 audit_status=status,
+                publication_disposition=(
+                    recorder.publication_disposition
+                ),
                 policy_gated_result=recorder.dispatch_result,
                 audit_entries=recorder.entries,
+                published_event_entries=(
+                    recorder.published_event_entries
+                ),
                 error=error,
+                publication_error=recorder.publication_error,
             )
         except Exception:
             logger.error(
@@ -471,14 +750,24 @@ class AuditedCommandPipeline:
                 audit_status=(
                     AuditIntegrationStatus.CONTROLLED_INTEGRATION_FAILURE
                 ),
+                publication_disposition=(
+                    recorder.publication_disposition
+                ),
                 policy_gated_result=recorder.dispatch_result,
                 audit_entries=recorder.entries,
+                published_event_entries=(
+                    recorder.published_event_entries
+                ),
                 error=_INTEGRATION_ERROR,
+                publication_error=recorder.publication_error,
             )
 
         return AuditedCommandPipelineResult(
             command_id=command.command_id,
             audit_status=AuditIntegrationStatus.COMPLETED,
+            publication_disposition=recorder.publication_disposition,
             policy_gated_result=dispatch_result,
             audit_entries=recorder.entries,
+            published_event_entries=recorder.published_event_entries,
+            publication_error=recorder.publication_error,
         )

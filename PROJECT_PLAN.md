@@ -2,7 +2,7 @@
 
 
 
-\## Current Milestone - Event-Producing Command Handler Contract
+\## Current Milestone - Event Journal Publication Integration
 
 
 
@@ -14,29 +14,32 @@ Scope:
 
 
 
-\- Extend the existing immutable `GameResult` with an ordered immutable tuple
-of zero or more `GameEvent` records that defaults to empty
+\- Add an atomic `GameEventJournal.append_batch()` operation that validates and
+materializes the complete ordered batch before one copy-on-write mutation
 
-\- Validate every produced event without repairing command linkage, replacing
-objects, reordering events, or removing duplicate IDs
+\- Preserve the existing single-event append API while rejecting invalid event
+values, duplicate IDs within a batch, and IDs already present in the journal
+without partial mutation or sequence gaps
 
-\- Convert invalid event collections, non-event values, mismatched originating
-command IDs, duplicate event IDs, and corrupted events into the existing safe
-`INVALID_HANDLER_RESULT`
+\- Inject `GameEventJournal` explicitly into the existing
+`AuditedCommandPipeline` and publish only the exact event tuple on a preserved
+`DISPATCHED` result
 
-\- Preserve valid event tuples unchanged through `GameEngine`, policy-gated
-dispatch, audited dispatch, post-dispatch audit failure, and defensive
-serialization
+\- Distinguish publication as `NOT_APPLICABLE`, `NO_EVENTS`, `PUBLISHED`, or
+`FAILED`, preserving immutable appended-entry snapshots and safe errors
 
-\- Keep blocked paths event-free and leave `GameEventJournal` append,
-publication, persistence, projection, transactions, and subscribers outside
-this milestone
+\- Preserve dispatcher authority, completed dispatch results, consumed replay
+state, and exactly-once handler behavior across publication and post-dispatch
+audit failures
+
+\- Keep event and audit journals independently successful after dispatch; do
+not add transactions, retries, persistence, queues, subscribers, or projection
 
 
 Only test handlers produce events. Current tools, managers, AI routing, rules,
 storage, UI, and Foundry behavior remain unchanged.
 
-Next milestone: **Event Journal Publication Integration**. It has not started.
+Next milestone: **World State Projection Foundation**. It has not started.
 
 
 

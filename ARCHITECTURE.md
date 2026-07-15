@@ -722,68 +722,99 @@ standard-library lock plus copy-on-write immutable state so a failed append
 does not alter entries or consume a sequence number. Immutable snapshots retain
 insertion order; exact filters cover event type, originating command ID,
 command ID, and typed audit stage; serialized lists are defensive copies.
-There is no update, delete, reorder, replacement, subscriber, queue, event bus,
-or persistence API.
+`GameEventJournal.append_batch()` additionally materializes and validates an
+entire ordered event collection before mutation, rejects invalid values and
+duplicate IDs within or already present outside the batch, and assigns one
+contiguous sequence range while holding the journal lock. The whole batch is
+appended or none of it is, empty batches are successful no-ops, concurrent
+batches cannot interleave, and the existing single-event `append()` behavior is
+preserved through the same atomic boundary. There is no update, delete,
+reorder, replacement, subscriber, queue, event bus, or persistence API.
 
 These journals are process-local foundations only. They are not durable,
 tamper-evident, or restart-replay storage. `CommandAuditJournal` now has the
-optional audited integration described below; `GameEventJournal` remains
-unconnected to dispatch, handlers, and world-state projection.
+optional audited integration described below, and an explicitly injected
+`GameEventJournal` receives validated dispatched result events through that
+same pipeline. Neither journal performs world-state projection.
 
 
-## Audited Command Pipeline Integration
+## Audited Command Pipeline and Event Publication Integration
 
-The optional audited command flow is:
+The optional audited and event-publication flow is:
 
 **GameCommand → AuditedCommandPipeline → PolicyGatedCommandDispatcher →
 policy and approval gate → optional GameEngine.dispatch() → preserved
-PolicyGatedDispatchResult + audit integration result**
+PolicyGatedDispatchResult → atomic GameEventJournal publication + audit
+integration result**
 
 `AuditedCommandPipeline` accepts a `GameCommand` and optional
 `HumanApprovalDecision`, delegates the complete behavioral submission to the
 existing `PolicyGatedCommandDispatcher`, and appends typed records to one
-injected `CommandAuditJournal`. It does not evaluate policy, resolve approvals,
-manage replay state, select a handler, call a handler, or reinterpret a
-`GameResult`. The dispatcher's existing public API and unaudited behavior remain
-unchanged. A private synchronous lifecycle-recorder protocol exposes only the
-actual policy, gate, blocked, pre-engine, post-engine, and coordinator-failure
-boundaries needed by the optional integration.
+injected `CommandAuditJournal`. It also requires an explicitly injected
+`GameEventJournal` and publishes only the exact ordered non-empty event tuple
+from a preserved `DISPATCHED` result through one `append_batch()` call. It does
+not evaluate policy, resolve approvals, manage replay state, select a handler,
+call a handler, reinterpret a `GameResult`, or repeat dispatch after a
+publication failure. The dispatcher's existing public API and unaudited
+behavior remain unchanged. A private synchronous lifecycle-recorder protocol
+exposes only the actual policy, gate, blocked, pre-engine, post-engine, and
+coordinator-failure boundaries needed by the optional integration.
 
 Applicable records are appended in logical order: command proposed, policy
 evaluated, approval evaluated when supplied or required, gate resolved,
 dispatch blocked or dispatch attempted, then dispatch completed or coordinator
 failure. Duplicate ready submissions produce a blocked record and never cross
-the engine boundary again. No audit path creates a `GameEvent`.
+the engine boundary again. Awaiting, suggestion, denial, invalid, duplicate,
+coordinator-failure, and other non-dispatched results never publish. A
+dispatched result without events performs no event-journal mutation. No audit
+path creates or modifies a `GameEvent`.
 
 Audit details are deliberately minimal. They may contain policy mode and stable
 reason code, approval outcome and approver identity, gate disposition and
 reason code, policy-gated dispatch status, and final `GameResult.status`.
+When event publication fails, one existing coordinator-failure audit stage may
+be attempted with only the stable publication phase, typed disposition, and
+event count.
 Command payloads, approval reasons, handler output, result error text, raw
 exceptions and tracebacks, prompts, responses, credentials, and hidden campaign
-content are not copied automatically. Command provenance and optional actor
-identity are linked without assigning roles or authority.
+content, including event payloads, are not copied automatically. Command
+provenance and optional actor identity are linked without assigning roles or
+authority.
 
 `AuditedCommandPipelineResult` is immutable. It preserves the authoritative
 `PolicyGatedDispatchResult` when one exists, returns an immutable tuple of the
-journal entries appended for that submission, serializes defensively, and
-distinguishes completed auditing, pre-dispatch audit failure, post-dispatch
-audit failure, and a controlled integration failure. Any valid produced events
-remain the exact ordered tuple on the preserved `GameResult`, including after a
-post-dispatch audit failure. Event payloads are not copied into audit details.
-Record IDs and UTC times come from injectable synchronous factories;
-production defaults use UUIDs and the existing UTC clock boundary.
+journal entries appended for that submission, and serializes defensively. Its
+typed event-publication disposition is `NOT_APPLICABLE`, `NO_EVENTS`,
+`PUBLISHED`, or `FAILED`; successful publication includes immutable appended
+event-entry snapshots, while failure includes only safe publication error text.
+The existing audit integration status still distinguishes completed auditing,
+pre-dispatch audit failure, post-dispatch failure, and a controlled integration
+failure. `FAILED` uses the existing post-dispatch classification to distinguish
+publication failure from pre-dispatch behavior without replacing the preserved
+dispatch and `GameResult`. Any valid produced events remain the exact ordered
+tuple on that result. Event payloads are not copied into audit details or
+publication errors. Record IDs and UTC times come from injectable synchronous
+factories; production defaults use UUIDs and the existing UTC clock boundary.
 
 The audit-failure boundary is the engine call. Every required pre-dispatch
 append, including `DISPATCH_ATTEMPTED`, must succeed before replay is consumed
 and before `GameEngine.dispatch()` is called. A failure therefore closes the
 gate without handler invocation. Once the engine boundary is crossed, a later
-audit failure preserves the original dispatch result and consumed replay state;
-the command is never retried or made executable again. Earlier successful
-appends remain in the journal in both cases.
+audit failure preserves the original dispatch result and consumed replay state.
+Validated result events are published atomically before the final
+`DISPATCH_COMPLETED` audit append, so a failure there cannot suppress or roll
+back a successful event batch. Publication failure leaves the entire new batch
+absent, preserves completed dispatch and consumed replay state, and is not
+retried; reusing the command ID is therefore a duplicate and does not republish.
+The event and audit journals are deliberately not transactionally coupled: once
+dispatch occurs, an audit append or event publication can succeed independently
+of the other, and neither successful append is rolled back. No failure path
+reinvokes the engine, dispatcher, handler, or publication operation.
 
-Auditing and replay protection remain process-local and non-durable. They do
-not provide restart-safe idempotency, persistence, tamper evidence, queues,
-transactions, retries, or event projection.
+Auditing, event publication, and replay protection remain process-local and
+non-durable. They do not provide restart-safe idempotency or publication
+recovery, persistence, tamper evidence, queues, transactions, retries, or world
+state projection.
 
 
 ## Tool Call Parsing Boundary

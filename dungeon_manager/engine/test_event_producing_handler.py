@@ -8,6 +8,7 @@ import pytest
 from .audited_pipeline import (
     AuditedCommandPipeline,
     AuditIntegrationStatus,
+    EventPublicationDisposition,
 )
 from .automation import (
     ApprovalOutcome,
@@ -84,16 +85,26 @@ def approval(command, outcome=ApprovalOutcome.APPROVED):
     )
 
 
-def audited_pipeline(handler, *, mode=AutomationMode.AUTOMATIC, journal=None):
+def audited_pipeline(
+    handler,
+    *,
+    mode=AutomationMode.AUTOMATIC,
+    journal=None,
+    event_journal=None,
+):
     dispatcher = PolicyGatedCommandDispatcher(
         policy(mode),
         engine_with_handler(handler),
     )
     audit_journal = CommandAuditJournal() if journal is None else journal
+    published_events = (
+        GameEventJournal() if event_journal is None else event_journal
+    )
     ids = itertools.count(1)
     pipeline = AuditedCommandPipeline(
         dispatcher,
         audit_journal,
+        published_events,
         audit_record_id_factory=lambda: f"audit-events-{next(ids):03d}",
         clock=lambda: FIXED_UTC,
     )
@@ -462,6 +473,12 @@ def test_audited_pipeline_preserves_events_and_sanitizes_audit_details():
     assert result.audit_status is AuditIntegrationStatus.COMPLETED
     assert result.policy_gated_result.game_result is expected
     assert result.policy_gated_result.game_result.events == (event,)
+    assert result.publication_disposition is (
+        EventPublicationDisposition.PUBLISHED
+    )
+    assert tuple(
+        entry.event for entry in result.published_event_entries
+    ) == (event,)
     assert secret not in json.dumps(audit_journal.to_list())
 
     serialized = result.to_dict()
@@ -481,9 +498,11 @@ def test_post_dispatch_audit_failure_preserves_original_events():
     event = make_event(command)
     expected = GameResult.success(command.command_id, events=(event,))
     journal = FailingAuditJournal(fail_on_append=5)
+    event_journal = GameEventJournal()
     pipeline, dispatcher, _ = audited_pipeline(
         lambda received: expected,
         journal=journal,
+        event_journal=event_journal,
     )
 
     result = pipeline.dispatch(command)
@@ -493,32 +512,31 @@ def test_post_dispatch_audit_failure_preserves_original_events():
     )
     assert result.policy_gated_result.game_result is expected
     assert result.policy_gated_result.game_result.events == (event,)
+    assert result.publication_disposition is (
+        EventPublicationDisposition.PUBLISHED
+    )
+    assert tuple(entry.event for entry in event_journal.entries) == (event,)
     assert dispatcher.dispatch_attempted_command_ids == (command.command_id,)
 
 
-def test_event_producing_dispatch_never_appends_to_game_event_journal(
-    monkeypatch,
-):
+def test_event_producing_audited_dispatch_appends_one_atomic_batch():
     command = make_command()
     event = make_event(command)
     event_journal = GameEventJournal()
-    append_calls = []
-
-    def unexpected_append(self, produced_event):
-        append_calls.append(produced_event)
-        raise AssertionError("Event publication is outside this milestone.")
-
-    monkeypatch.setattr(GameEventJournal, "append", unexpected_append)
     pipeline, _, _ = audited_pipeline(
         lambda received: GameResult.success(
             received.command_id,
             events=(event,),
-        )
+        ),
+        event_journal=event_journal,
     )
 
     result = pipeline.dispatch(command)
 
     assert result.audit_status is AuditIntegrationStatus.COMPLETED
     assert result.policy_gated_result.game_result.events == (event,)
-    assert event_journal.entries == ()
-    assert append_calls == []
+    assert result.publication_disposition is (
+        EventPublicationDisposition.PUBLISHED
+    )
+    assert result.published_event_entries == event_journal.entries
+    assert tuple(entry.event for entry in event_journal.entries) == (event,)

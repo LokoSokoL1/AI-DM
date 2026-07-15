@@ -30,12 +30,13 @@ Game Engine Foundation
 
 
 
-Event-Producing Command Handler Contract. Successful handlers may now return an
-ordered immutable tuple of `GameEvent` world facts on the existing `GameResult`.
-The engine validates exact originating-command linkage, event structure, and
-per-result event-ID uniqueness without repairing or publishing records. Policy,
-approval, replay, audit, ToolAgent, manager, storage, Ollama, and Foundry
-behavior remains unchanged.
+Event Journal Publication Integration. The existing `AuditedCommandPipeline`
+now explicitly receives a `GameEventJournal` and atomically publishes the exact
+ordered event tuple from a preserved `DISPATCHED` result. The policy-gated
+dispatcher remains authoritative for policy, approval, replay protection, and
+one-attempt engine dispatch. Blocked and eventless paths do not mutate the event
+journal, while publication failure preserves dispatch and consumed replay state
+without retry.
 
 
 
@@ -208,6 +209,28 @@ handler result contract was added.
 \- The complete deterministic pytest suite passes 319 tests after the
 Event-Producing Command Handler Contract milestone was added.
 
+\- Atomic event-journal batch coverage verifies one and multiple ordered
+events, contiguous sequences, empty batches, invalid values, duplicate IDs
+within and against the journal, failure rollback without sequence gaps,
+non-interleaving concurrent batches, immutable snapshots, and backward-
+compatible single append.
+
+\- Event-publication integration coverage verifies automatic and approved
+dispatch, eventless and controlled engine results, every blocked status,
+duplicate suppression, explicit journal injection, publication failure with
+preserved dispatch and replay state, post-dispatch audit independence,
+sanitized failure audit details, immutable result snapshots, defensive JSON
+serialization, and no execution or publication retry.
+
+\- The focused journal, audited-pipeline, event-producing handler, publication,
+and dependency suite passes 101 tests.
+
+\- The complete focused engine suite passes 275 tests after Event Journal
+Publication Integration was added.
+
+\- The complete deterministic pytest suite passes 349 tests after Event Journal
+Publication Integration was added.
+
 
 
 \## Implemented Functionality
@@ -346,7 +369,20 @@ defensively, and keeps all controlled engine failures event-free
 
 \- Unchanged preservation of valid handler-produced events through the game
 engine, automatic or approved policy-gated dispatch, audited dispatch, and
-post-dispatch audit failure without appending to `GameEventJournal`
+post-dispatch audit failure
+
+\- Atomic ordered `GameEventJournal.append_batch()` publication with complete
+pre-mutation validation, within-batch and existing-ID rejection, contiguous
+sequence assignment, empty no-op behavior, non-interleaving concurrent batches,
+and the preserved single-event append API
+
+\- Explicit `GameEventJournal` injection into the existing audited pipeline,
+with publication limited to preserved `DISPATCHED` result events and typed
+`NOT_APPLICABLE`, `NO_EVENTS`, `PUBLISHED`, or `FAILED` disposition
+
+\- Immutable successful publication-entry snapshots, safe publication errors,
+defensive serialization, independently successful post-dispatch audit and event
+journal appends, and replay-preserving no-retry publication failure
 
 
 
@@ -367,9 +403,9 @@ model behavior remains nondeterministic and intentionally outside normal tests
 
 
 
-\- Event Journal Publication Integration that explicitly appends validated
-handler-produced events after successful dispatch; the current milestone only
-returns events and does not publish or persist them
+\- World State Projection Foundation that consumes published world facts
+without adding persistence, subscribers, queues, gameplay rules, or Foundry
+integration in the completed publication milestone
 
 \- Durable, tamper-evident event and audit storage plus any restart-safe replay
 protection; the current journals are in-memory only
@@ -387,8 +423,7 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**Event Journal Publication Integration**. Append validated handler-produced
-events to the existing `GameEventJournal` at the correct successful dispatch
-boundary without starting persistence, projection, transactions, subscribers,
-queues, retries, gameplay rules, Foundry integration, or unrelated systems.
+**World State Projection Foundation**. Define the next provider-independent
+boundary for deriving world-state views from published events without starting
+persistence, subscribers, queues, gameplay rules, UI, or Foundry integration.
 
