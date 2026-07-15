@@ -2,7 +2,7 @@
 
 
 
-\## Current Milestone - Tool Execution
+\## Current Milestone - ToolAgent Parser/Executor Integration
 
 
 
@@ -14,21 +14,23 @@ Scope:
 
 
 
-\- Accept an already validated typed `ToolCall`
+\- Make one provider request through the existing provider abstraction
 
-\- Resolve and execute one tool through the central `ToolRegistry`
+\- Parse the complete provider response with the existing Tool Call Parser
 
-\- Return typed success, unknown-tool, invalid-argument, or tool-failure results
+\- Return typed ordinary-response, malformed-request, or tool-execution results
 
-\- Preserve normal tool output for later use as an observation
+\- Execute one valid call through the existing Tool Executor and shared registry
 
-\- Avoid retries, AI-provider calls, and direct storage access
+\- Preserve the raw response, parsed call, and unchanged executor observation
+
+\- Avoid follow-up provider calls, retries, loops, and direct storage access
 
 
 
-Next milestone: ToolAgent Parser/Executor Integration. Connect provider responses
-to parsing and one controlled execution/observation flow. `ToolAgent` integration
-and the complete agent loop remain planned and have not started.
+Next milestone: **Single-Tool Observation/Response Loop**. Send one completed
+tool observation back to the provider for one final assistant response. That loop
+has not started.
 
 
 

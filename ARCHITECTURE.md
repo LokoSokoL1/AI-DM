@@ -529,8 +529,9 @@ A structurally valid request contains a non-empty `tool` string and an
 accept one clean JSON Markdown fence only when the fence contains the entire
 response; it does not scan surrounding prose for embedded JSON.
 
-Parsing does not look up the tool registry, execute a tool, modify game state, or
-change `ToolAgent` behavior. Those responsibilities belong to later milestones.
+Parsing does not look up the tool registry, execute a tool, or modify game state.
+`ToolAgent` consumes the parser's typed classification without duplicating its
+validation rules.
 
 
 ## Tool Execution Boundary
@@ -548,6 +549,33 @@ converted to safe error text without exposing tracebacks to callers.
 
 The executor does not parse AI text, call an AI provider, retry tools, choose a
 fallback tool, or access storage directly. State changes still flow through
-registered tools and their managers. `ToolAgent` does not yet use the parser or
-executor; that integration remains a later milestone.
+registered tools and their managers.
+
+
+## ToolAgent Single-Pass Boundary
+
+`ToolAgent` constructs the existing prompt from the user request and the names
+exposed by one central `ToolRegistry`, then makes exactly one request through the
+provider abstraction. The complete raw provider response is passed once to the
+Tool Call Parser.
+
+`ToolAgentResult` distinguishes three outcomes:
+
+- `ASSISTANT_RESPONSE` preserves an ordinary raw response and does not invoke the
+  executor.
+- `MALFORMED_TOOL_REQUEST` preserves the raw response and parser error and does
+  not invoke the executor.
+- `TOOL_EXECUTION` preserves the raw response and parsed `ToolCall`, invokes the
+  Tool Executor exactly once, and returns its unchanged `ToolExecutionResult` as
+  the structured observation.
+
+The registry used for tool-name discovery is also supplied to the executor, so
+prompt exposure and execution resolve against the same tool set. Unknown tools,
+invalid arguments, controlled failures, and normal outputs remain executor-level
+results rather than being reinterpreted by `ToolAgent`.
+
+This is a single provider/parse/optional-execution pass. It does not make a
+follow-up provider request, send the observation to the model, retry, correct,
+execute multiple calls, loop recursively, or access managers or storage
+directly.
 

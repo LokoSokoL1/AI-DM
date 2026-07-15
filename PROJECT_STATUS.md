@@ -30,7 +30,8 @@ AI Core
 
 
 
-Tool Execution. It is implemented and deterministically tested.
+ToolAgent Parser/Executor Integration. It is implemented and deterministically
+tested.
 
 
 
@@ -50,8 +51,14 @@ preservation, and confirmation that failures do not retry or invoke another tool
 `CharacterTools`, `CharacterManager`, and temporary JSON storage without touching
 normal project data.
 
-\- The complete deterministic pytest suite passes 27 tests, including the 10
-Tool Executor tests.
+\- The ToolAgent integration has 15 deterministic tests covering ordinary text,
+valid calls with and without arguments, malformed JSON, unknown tools, invalid
+arguments, tool exceptions, unchanged successful output, provider call counts,
+prompt/tool discovery, provider-error propagation, and the real registry with
+temporary storage.
+
+\- The complete deterministic pytest suite passes 42 tests: the previous 27
+parser/executor tests plus the 15 ToolAgent integration tests.
 
 \- Existing deterministic smoke scripts successfully exercise the data models,
 JSON storage, campaign manager, character tools, and tool registry.
@@ -90,14 +97,22 @@ lookup, tool execution, or game-state changes
 \- A typed, standalone Tool Executor that resolves through the central registry,
 validates callable arguments, executes once, and preserves normal tool output
 
+\- A typed, single-pass `ToolAgent` integration that makes one provider request,
+parses the complete response, avoids execution for ordinary or malformed
+responses, and invokes the existing executor once for a valid call
+
+\- `ToolAgentResult`, which preserves the raw response and distinguishes an
+ordinary assistant response, a malformed tool request, and a completed tool
+execution attempt with its parsed call and unchanged executor observation
+
 
 
 \## Partially Implemented Functionality
 
 
 
-\- `ToolAgent` exposes registered tool names to the model and returns the model's
-response, but it does not parse responses or execute tools
+\- `ToolAgent` returns a structured observation but does not yet send that
+observation back to the model for a final assistant response
 
 \- Ollama communication is implemented but is not covered by deterministic tests
 
@@ -111,9 +126,9 @@ response, but it does not parse responses or execute tools
 
 
 
-\- Parser and execution integration with `ToolAgent`
+\- A single-tool observation/response loop
 
-\- The full agent loop
+\- Any later multi-step agent loop
 
 \- Prompt management and context handling beyond current prompt construction
 
@@ -126,7 +141,7 @@ work described in `PROJECT_PLAN.md`
 
 
 
-ToolAgent Parser/Executor Integration. Connect provider responses to parsing and
-one controlled execution/observation flow without adding retries, permissions,
-memory, or other full-agent-loop features.
+**Single-Tool Observation/Response Loop**. Send one completed tool observation
+back to the provider for one final assistant response without adding multiple
+tool calls, retries, recursive autonomy, permissions, or memory.
 
