@@ -94,3 +94,31 @@ def test_event_and_audit_foundations_have_only_data_boundary_dependencies():
         }
 
         assert relative_imports == expected
+
+
+def test_audited_pipeline_uses_only_existing_engine_and_audit_boundaries():
+    path = Path(__file__).resolve().parent / "audited_pipeline.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    relative_imports = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level > 0
+    }
+    accessed_attributes = {
+        node.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+    }
+
+    assert relative_imports == {
+        "_json",
+        "_time",
+        "audit",
+        "automation",
+        "command",
+        "journals",
+        "policy_gated_dispatcher",
+    }
+    assert "_handlers" not in accessed_attributes
+    assert "handler" not in accessed_attributes

@@ -712,9 +712,62 @@ There is no update, delete, reorder, replacement, subscriber, queue, event bus,
 or persistence API.
 
 These journals are process-local foundations only. They are not durable,
-tamper-evident, restart-replay storage, or integrated with
-`PolicyGatedCommandDispatcher`, `GameEngine.dispatch()`, handlers, or world
-state projection.
+tamper-evident, or restart-replay storage. `CommandAuditJournal` now has the
+optional audited integration described below; `GameEventJournal` remains
+unconnected to dispatch, handlers, and world-state projection.
+
+
+## Audited Command Pipeline Integration
+
+The optional audited command flow is:
+
+**GameCommand → AuditedCommandPipeline → PolicyGatedCommandDispatcher →
+policy and approval gate → optional GameEngine.dispatch() → preserved
+PolicyGatedDispatchResult + audit integration result**
+
+`AuditedCommandPipeline` accepts a `GameCommand` and optional
+`HumanApprovalDecision`, delegates the complete behavioral submission to the
+existing `PolicyGatedCommandDispatcher`, and appends typed records to one
+injected `CommandAuditJournal`. It does not evaluate policy, resolve approvals,
+manage replay state, select a handler, call a handler, or reinterpret a
+`GameResult`. The dispatcher's existing public API and unaudited behavior remain
+unchanged. A private synchronous lifecycle-recorder protocol exposes only the
+actual policy, gate, blocked, pre-engine, post-engine, and coordinator-failure
+boundaries needed by the optional integration.
+
+Applicable records are appended in logical order: command proposed, policy
+evaluated, approval evaluated when supplied or required, gate resolved,
+dispatch blocked or dispatch attempted, then dispatch completed or coordinator
+failure. Duplicate ready submissions produce a blocked record and never cross
+the engine boundary again. No audit path creates a `GameEvent`.
+
+Audit details are deliberately minimal. They may contain policy mode and stable
+reason code, approval outcome and approver identity, gate disposition and
+reason code, policy-gated dispatch status, and final `GameResult.status`.
+Command payloads, approval reasons, handler output, result error text, raw
+exceptions and tracebacks, prompts, responses, credentials, and hidden campaign
+content are not copied automatically. Command provenance and optional actor
+identity are linked without assigning roles or authority.
+
+`AuditedCommandPipelineResult` is immutable. It preserves the authoritative
+`PolicyGatedDispatchResult` when one exists, returns an immutable tuple of the
+journal entries appended for that submission, serializes defensively, and
+distinguishes completed auditing, pre-dispatch audit failure, post-dispatch
+audit failure, and a controlled integration failure. Record IDs and UTC times
+come from injectable synchronous factories; production defaults use UUIDs and
+the existing UTC clock boundary.
+
+The audit-failure boundary is the engine call. Every required pre-dispatch
+append, including `DISPATCH_ATTEMPTED`, must succeed before replay is consumed
+and before `GameEngine.dispatch()` is called. A failure therefore closes the
+gate without handler invocation. Once the engine boundary is crossed, a later
+audit failure preserves the original dispatch result and consumed replay state;
+the command is never retried or made executable again. Earlier successful
+appends remain in the journal in both cases.
+
+Auditing and replay protection remain process-local and non-durable. They do
+not provide restart-safe idempotency, persistence, tamper evidence, queues,
+transactions, retries, or event projection.
 
 
 ## Tool Call Parsing Boundary

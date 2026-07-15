@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
-from typing import Any, Optional
+from typing import Any, Optional, Protocol
 
 from ._json import validate_trimmed_identifier
 from .automation import (
@@ -38,6 +38,56 @@ _GATE_FAILURE_EXPLANATION = (
 _DISPATCH_FAILURE_EXPLANATION = (
     "The dispatch attempt did not return a valid game result."
 )
+
+
+class _DispatchLifecycleRecorder(Protocol):
+    """Internal synchronous observations around authoritative dispatch logic."""
+
+    def policy_evaluated(
+        self,
+        command: GameCommand,
+        decision: PolicyDecision,
+    ) -> None:
+        ...
+
+    def gate_resolved(
+        self,
+        command: GameCommand,
+        decision: PolicyDecision,
+        approval: Optional[HumanApprovalDecision],
+        disposition: GateDisposition,
+    ) -> None:
+        ...
+
+    def dispatch_blocked(
+        self,
+        command: GameCommand,
+        result: "PolicyGatedDispatchResult",
+    ) -> None:
+        ...
+
+    def dispatch_attempted(
+        self,
+        command: GameCommand,
+        decision: PolicyDecision,
+        approval: Optional[HumanApprovalDecision],
+        disposition: GateDisposition,
+    ) -> None:
+        ...
+
+    def dispatch_completed(
+        self,
+        command: GameCommand,
+        result: "PolicyGatedDispatchResult",
+    ) -> None:
+        ...
+
+    def coordinator_failed(
+        self,
+        command: GameCommand,
+        result: "PolicyGatedDispatchResult",
+    ) -> None:
+        ...
 
 
 class PolicyGatedDispatchStatus(str, Enum):
@@ -289,6 +339,16 @@ class PolicyGatedCommandDispatcher:
     ) -> PolicyGatedDispatchResult:
         """Evaluate, resolve, and dispatch once only when the gate is ready."""
 
+        return self._dispatch_with_lifecycle(command, approval, None)
+
+    def _dispatch_with_lifecycle(
+        self,
+        command: GameCommand,
+        approval: Optional[HumanApprovalDecision],
+        lifecycle_recorder: Optional[_DispatchLifecycleRecorder],
+    ) -> PolicyGatedDispatchResult:
+        """Internal audited integration without widening the public API."""
+
         if not isinstance(command, GameCommand):
             raise TypeError(
                 "PolicyGatedCommandDispatcher.dispatch requires a GameCommand."
@@ -296,10 +356,24 @@ class PolicyGatedCommandDispatcher:
 
         decision = self._evaluate_policy(command, approval)
         if isinstance(decision, PolicyGatedDispatchResult):
+            if lifecycle_recorder is not None:
+                lifecycle_recorder.coordinator_failed(command, decision)
             return decision
+
+        auditable_decision = self._validated_decision_for_command(
+            decision,
+            command,
+        )
+        if auditable_decision is not None and lifecycle_recorder is not None:
+            lifecycle_recorder.policy_evaluated(
+                command,
+                auditable_decision,
+            )
 
         disposition = self._resolve_gate(command, decision, approval)
         if isinstance(disposition, PolicyGatedDispatchResult):
+            if lifecycle_recorder is not None:
+                lifecycle_recorder.coordinator_failed(command, disposition)
             return disposition
 
         valid_decision = self._validated_decision_for_command(
@@ -316,23 +390,29 @@ class PolicyGatedCommandDispatcher:
                     command,
                 )
             ):
-                return PolicyGatedDispatchResult(
+                result = PolicyGatedDispatchResult(
                     command_id=command.command_id,
                     status=PolicyGatedDispatchStatus.INVALID,
                     explanation=disposition.explanation,
                     gate_disposition=disposition,
                     approval_decision=self._validated_approval(approval),
                 )
+                if lifecycle_recorder is not None:
+                    lifecycle_recorder.dispatch_blocked(command, result)
+                return result
             logger.error(
                 "Automation policy returned a decision that did not match "
                 "the command (command_id=%s)",
                 command.command_id,
             )
-            return self._coordinator_failure(
+            result = self._coordinator_failure(
                 command,
                 _POLICY_FAILURE_EXPLANATION,
                 approval=approval,
             )
+            if lifecycle_recorder is not None:
+                lifecycle_recorder.coordinator_failed(command, result)
+            return result
 
         if not self._disposition_matches(
             disposition,
@@ -344,11 +424,22 @@ class PolicyGatedCommandDispatcher:
                 "the command (command_id=%s)",
                 command.command_id,
             )
-            return self._coordinator_failure(
+            result = self._coordinator_failure(
                 command,
                 _GATE_FAILURE_EXPLANATION,
                 policy_decision=valid_decision,
                 approval=approval,
+            )
+            if lifecycle_recorder is not None:
+                lifecycle_recorder.coordinator_failed(command, result)
+            return result
+
+        if lifecycle_recorder is not None:
+            lifecycle_recorder.gate_resolved(
+                command,
+                valid_decision,
+                approval,
+                disposition,
             )
 
         if disposition.status is not GateDispositionStatus.READY:
@@ -359,14 +450,17 @@ class PolicyGatedCommandDispatcher:
                     "command_id=%s",
                     command.command_id,
                 )
-                return self._coordinator_failure(
+                result = self._coordinator_failure(
                     command,
                     _GATE_FAILURE_EXPLANATION,
                     policy_decision=valid_decision,
                     gate_disposition=disposition,
                     approval=approval,
                 )
-            return PolicyGatedDispatchResult(
+                if lifecycle_recorder is not None:
+                    lifecycle_recorder.coordinator_failed(command, result)
+                return result
+            result = PolicyGatedDispatchResult(
                 command_id=command.command_id,
                 status=result_status,
                 explanation=disposition.explanation,
@@ -374,10 +468,14 @@ class PolicyGatedCommandDispatcher:
                 gate_disposition=disposition,
                 approval_decision=self._validated_approval(approval),
             )
+            if lifecycle_recorder is not None:
+                lifecycle_recorder.dispatch_blocked(command, result)
+            return result
 
+        duplicate_result = None
         with self.__replay_lock:
             if command.command_id in self.__dispatch_attempted_command_ids:
-                return PolicyGatedDispatchResult(
+                duplicate_result = PolicyGatedDispatchResult(
                     command_id=command.command_id,
                     status=PolicyGatedDispatchStatus.DUPLICATE,
                     explanation=_DUPLICATE_EXPLANATION,
@@ -385,7 +483,23 @@ class PolicyGatedCommandDispatcher:
                     gate_disposition=disposition,
                     approval_decision=self._validated_approval(approval),
                 )
-            self.__dispatch_attempted_command_ids.add(command.command_id)
+            else:
+                if lifecycle_recorder is not None:
+                    lifecycle_recorder.dispatch_attempted(
+                        command,
+                        valid_decision,
+                        approval,
+                        disposition,
+                    )
+                self.__dispatch_attempted_command_ids.add(command.command_id)
+
+        if duplicate_result is not None:
+            if lifecycle_recorder is not None:
+                lifecycle_recorder.dispatch_blocked(
+                    command,
+                    duplicate_result,
+                )
+            return duplicate_result
 
         try:
             game_result = self.__game_engine.dispatch(command)
@@ -404,7 +518,7 @@ class PolicyGatedCommandDispatcher:
                 "recorded (command_id=%s)",
                 command.command_id,
             )
-            return self._coordinator_failure(
+            result = self._coordinator_failure(
                 command,
                 _DISPATCH_FAILURE_EXPLANATION,
                 dispatch_attempted=True,
@@ -412,8 +526,11 @@ class PolicyGatedCommandDispatcher:
                 gate_disposition=disposition,
                 approval=approval,
             )
+            if lifecycle_recorder is not None:
+                lifecycle_recorder.coordinator_failed(command, result)
+            return result
 
-        return PolicyGatedDispatchResult(
+        result = PolicyGatedDispatchResult(
             command_id=command.command_id,
             status=PolicyGatedDispatchStatus.DISPATCHED,
             explanation=_DISPATCHED_EXPLANATION,
@@ -423,6 +540,9 @@ class PolicyGatedCommandDispatcher:
             approval_decision=self._validated_approval(approval),
             game_result=game_result,
         )
+        if lifecycle_recorder is not None:
+            lifecycle_recorder.dispatch_completed(command, result)
+        return result
 
     def _evaluate_policy(
         self,

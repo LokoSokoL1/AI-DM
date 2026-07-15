@@ -30,10 +30,11 @@ Game Engine Foundation
 
 
 
-Game Event Foundation and Audit Records. Immutable world-fact events and
-command-lifecycle audit records now have separate process-local append-only
-journals without integration into dispatch, handlers, world state, ToolAgent,
-managers, storage, Ollama, or Foundry paths.
+Audited Command Pipeline Integration. The existing policy-gated dispatcher now
+offers private synchronous lifecycle observations to an optional audited
+wrapper, which records safe ordered command traces without changing policy,
+approval, gate, replay, engine, handler, ToolAgent, manager, storage, Ollama, or
+Foundry behavior. No game events are produced.
 
 
 
@@ -178,6 +179,20 @@ command-audit foundations were added.
 \- The complete deterministic pytest suite passes 268 tests after the Game
 Event Foundation and Audit Records milestone was added.
 
+\- The focused audited-pipeline module passes 23 tests covering automatic and
+approved dispatch, awaiting approval, suggestions, denials, unknown
+capabilities, invalid and mismatched approvals, duplicate attempts, controlled
+engine results, domain-negative output, sanitized details, deterministic IDs
+and UTC times, pre- and post-dispatch append failures, partial history, replay
+consumption, no retries, immutable results, no game events, and unaudited
+compatibility.
+
+\- The complete focused engine suite passes 218 tests after the audited command
+pipeline and its dependency boundary were added.
+
+\- The complete deterministic pytest suite passes 292 tests after the Audited
+Command Pipeline Integration milestone was added.
+
 
 
 \## Implemented Functionality
@@ -295,6 +310,20 @@ append-only containers with atomic sequence assignment from 1, duplicate-ID
 rejection without sequence gaps, insertion-ordered immutable snapshots, exact
 filters, and defensive serialized copies
 
+\- An optional synchronous `AuditedCommandPipeline` that delegates all behavior
+to `PolicyGatedCommandDispatcher` and records ordered proposal, policy,
+applicable approval, gate, blocked or attempted dispatch, completion, and
+coordinator-failure stages
+
+\- An immutable `AuditedCommandPipelineResult` that preserves the authoritative
+policy-gated result when available, returns immutable appended-entry snapshots,
+serializes defensively, and distinguishes completed, pre-dispatch failure,
+post-dispatch failure, and controlled integration outcomes
+
+\- Fail-closed pre-dispatch auditing before replay consumption and the engine
+boundary, plus post-dispatch result/replay preservation with no retry; both
+audit journals and replay state remain in-memory and non-durable
+
 
 
 \## Partially Implemented Functionality
@@ -314,8 +343,9 @@ model behavior remains nondeterministic and intentionally outside normal tests
 
 
 
-\- Audited command pipeline integration that creates safe lifecycle audit
-records and true world events at the appropriate existing boundaries
+\- Event-producing command-handler contracts that create true world facts only
+after appropriate successful domain handling; this milestone does not yet emit
+events
 
 \- Durable, tamper-evident event and audit storage plus any restart-safe replay
 protection; the current journals are in-memory only
@@ -333,8 +363,8 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**Audited Command Pipeline Integration**. Connect the existing policy-gated
-command lifecycle to safe audit recording and true post-handling world events
-without starting persistence, gameplay rules, Foundry integration, or unrelated
-systems.
+**Event-Producing Command Handler Contract**. Define how successful command
+handlers return true world facts for later journal append without changing
+policy, approval, replay, audit, persistence, gameplay rules, Foundry
+integration, or unrelated systems.
 

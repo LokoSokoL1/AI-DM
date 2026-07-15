@@ -2,6 +2,12 @@
 
 from .audit import AuditStage, CommandAuditRecord
 
+from .audited_pipeline import (
+    AuditedCommandPipeline,
+    AuditedCommandPipelineResult,
+    AuditIntegrationStatus,
+)
+
 from .automation import (
     ApprovalOutcome,
     AutomationMode,
@@ -34,6 +40,9 @@ from .result import GameResult, GameResultStatus
 
 __all__ = [
     "ApprovalOutcome",
+    "AuditedCommandPipeline",
+    "AuditedCommandPipelineResult",
+    "AuditIntegrationStatus",
     "AuditStage",
     "AutomationMode",
     "AutomationPolicy",

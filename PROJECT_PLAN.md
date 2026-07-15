@@ -2,7 +2,7 @@
 
 
 
-\## Current Milestone - Game Event Foundation and Audit Records
+\## Current Milestone - Audited Command Pipeline Integration
 
 
 
@@ -14,31 +14,30 @@ Scope:
 
 
 
-\- Add immutable, data-only `GameEvent` facts with stable IDs, schema versions,
-exact event types, command/provenance linkage, and canonical UTC occurrence
-times
+\- Add an optional synchronous `AuditedCommandPipeline` around the existing
+policy-gated dispatcher without duplicating policy, approval, gate, replay, or
+engine-dispatch behavior
 
-\- Add immutable `CommandAuditRecord` traces with typed lifecycle stages, safe
-structured details, initiator provenance, actor identity, and canonical UTC
-recording times
+\- Append safe typed audit records for proposal, policy, applicable approval,
+gate, blocked or attempted dispatch, completion, and coordinator failure
 
-\- Add separate in-memory append-only game-event and command-audit journals with
-atomic sequence assignment, duplicate rejection, immutable snapshots, exact
-filtering, and defensive serialization
+\- Add an immutable audited result that preserves the authoritative
+`PolicyGatedDispatchResult`, immutable journal-entry references, audit status,
+and safe failure text
 
-\- Preserve the boundary between command intention, policy or approval,
-handling result, world fact, and lifecycle audit trace
+\- Fail closed before the engine boundary when a required audit append fails;
+after the boundary, preserve the result and replay consumption without retry
 
-\- Keep `PolicyGatedCommandDispatcher`, `GameEngine.dispatch()`, handlers,
-ToolAgent, tools, managers, storage, Ollama, Foundry, and gameplay behavior
-unchanged
+\- Keep unaudited coordinator behavior backward compatible and produce no
+`GameEvent` records
 
 
-Current journals are process-local and in-memory. They are not durable,
-tamper-evident, restart-replay storage, or integrated with dispatch or world
-state projection.
+Audit and replay state remain process-local and in-memory. They are not durable,
+tamper-evident, restart-safe, transactional, or integrated with world-state
+projection.
 
-Next milestone: **Audited Command Pipeline Integration**. It has not started.
+Next milestone: **Event-Producing Command Handler Contract**. It has not
+started.
 
 
 
