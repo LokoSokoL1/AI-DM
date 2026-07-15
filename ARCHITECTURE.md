@@ -570,12 +570,12 @@ The current pre-dispatch automation flow is:
 **GameCommand → AutomationPolicy → PolicyDecision → optional
 HumanApprovalDecision → GateDisposition**
 
-This is a pure decision boundary. It does not call `GameEngine.dispatch()`, a
-handler, a tool, a manager, storage, an AI provider, a UI, or Foundry. Dispatch
-integration is deliberately deferred to the next milestone. A `READY`
-disposition means only that automation confirmation is satisfied; it does not
-mean permissions, game rules, command validation, dispatch, or execution have
-succeeded.
+This remains a pure decision boundary. It does not call
+`GameEngine.dispatch()`, a handler, a tool, a manager, storage, an AI provider,
+a UI, or Foundry. A `READY` disposition means only that automation confirmation
+is satisfied; it does not mean permissions, game rules, command validation,
+dispatch, or execution have succeeded. The separate coordinator described
+below composes this pure boundary with the existing engine dispatcher.
 
 `AutomationPolicy` uses the trusted exact `GameCommand.command_type` as its
 case-sensitive capability key. Policy configuration consists of explicitly
@@ -617,6 +617,52 @@ not authority that overrides them. A preset may therefore produce automatic
 initiative, confirmed dice rolls, suggested token movement, and denied
 automatic damage in the same configuration. Roles, DM/player permission
 authority, persistence, events, and gameplay rules remain future boundaries.
+
+
+## Policy-Gated Command Dispatch Boundary
+
+The controlled command flow is now:
+
+**GameCommand → AutomationPolicy → PolicyDecision → optional
+HumanApprovalDecision → GateDisposition → optional GameEngine.dispatch() →
+PolicyGatedDispatchResult**
+
+`PolicyGatedCommandDispatcher` is a small synchronous coordinator configured
+with one immutable `AutomationPolicy` and one `GameEngine`. Its public dispatch
+entry accepts only a `GameCommand` and optional `HumanApprovalDecision`.
+Callers cannot provide a policy decision, automation mode, capability, or gate
+disposition. The coordinator delegates policy precedence to
+`AutomationPolicy.evaluate()`, approval validation and gate resolution to
+`resolve_automation_gate()`, and exact handler selection and invocation to
+`GameEngine.dispatch()`; it never calls a handler directly.
+
+`PolicyGatedDispatchResult` is immutable and distinguishes `DISPATCHED`,
+`AWAITING_APPROVAL`, `SUGGESTION_ONLY`, `DENIED`, `INVALID`, `DUPLICATE`, and
+`COORDINATOR_FAILURE`. It preserves the command ID, every successfully produced
+policy decision, the gate disposition, a valid supplied approval for future
+audit provenance, the exact `GameResult` when dispatch returned normally, and
+a safe caller-facing explanation. Only `DISPATCHED` contains a `GameResult`,
+and it means dispatch was attempted rather than that handling succeeded.
+`UNKNOWN_COMMAND`, `INVALID_COMMAND`, `INVALID_HANDLER_RESULT`, and
+`HANDLER_FAILURE` therefore remain unchanged engine outcomes inside a dispatched
+aggregate. A normal domain-negative output remains a successful engine result.
+
+Each coordinator instance has process-local command-ID replay protection. A
+ready command ID is recorded atomically before `GameEngine.dispatch()` is
+called, which blocks repeated and re-entrant dispatch attempts. Awaiting,
+suggested, denied, and invalid submissions do not consume the ID; in particular,
+a human denial can later be replaced by an approval for the same command. A
+sorted immutable snapshot is available for diagnostics, with no API for
+removing IDs. This state is neither shared between coordinator instances nor
+durable across process restarts. Restart-safe idempotency requires future event
+or journal persistence.
+
+Unexpected policy, gate, or coordinator failures are logged internally and
+fail closed with safe aggregate results. An unexpected exception after the
+engine call begins consumes replay protection and is not retried. Normal
+controlled `GameResult` failures are not reinterpreted as coordinator failures,
+and policy evaluation, gate resolution, dispatch, and handlers are each
+attempted at most once per submission.
 
 
 ## Tool Call Parsing Boundary

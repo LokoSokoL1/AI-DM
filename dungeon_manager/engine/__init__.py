@@ -16,6 +16,11 @@ from .automation import (
 
 from .command import CommandProvenance, CommandSource, GameCommand
 from .game_engine import CommandHandler, GameEngine
+from .policy_gated_dispatcher import (
+    PolicyGatedCommandDispatcher,
+    PolicyGatedDispatchResult,
+    PolicyGatedDispatchStatus,
+)
 from .result import GameResult, GameResultStatus
 
 __all__ = [
@@ -35,6 +40,9 @@ __all__ = [
     "GateReasonCode",
     "HumanApprovalDecision",
     "PolicyDecision",
+    "PolicyGatedCommandDispatcher",
+    "PolicyGatedDispatchResult",
+    "PolicyGatedDispatchStatus",
     "PolicyReasonCode",
     "resolve_automation_gate",
 ]

@@ -2,7 +2,7 @@
 
 
 
-\## Current Milestone - Automation Policy and Approval Decisions
+\## Current Milestone - Policy-Gated Command Dispatch
 
 
 
@@ -14,27 +14,28 @@ Scope:
 
 
 
-\- Add immutable `DENY`, `SUGGEST`, `REQUIRE_CONFIRMATION`, and `AUTOMATIC`
-automation modes
+\- Compose the existing immutable automation policy, approval resolver, and
+`GameEngine` through one synchronous coordinator
 
-\- Add a deeply immutable, defensive, case-sensitive per-capability policy with
-exact capability/initiator overrides and fail-closed defaults
+\- Expose one immutable combined result that preserves policy and gate
+provenance plus the exact `GameResult` only when dispatch was attempted
 
-\- Add immutable linked policy decisions, explicit human approval or denial
-records, and pure gate dispositions
+\- Dispatch only a `READY` gate disposition while preserving awaiting,
+suggestion, denial, invalid, duplicate, and controlled failure outcomes
 
-\- Preserve initiator and actor identity without inferring roles or permission
-authority, and ignore command payload attempts to self-authorize
+\- Add per-coordinator process-local command-ID replay protection recorded
+before engine dispatch, including repeated and re-entrant submission blocking
 
-\- Keep `GameEngine.dispatch`, ToolAgent, tools, managers, storage, Ollama,
-Foundry, and gameplay behavior unchanged
+\- Keep policy precedence, approval validation, handler resolution,
+`GameEngine.dispatch`, ToolAgent, tools, managers, storage, Ollama, Foundry, and
+gameplay behavior unchanged
 
 
-`READY` means only that automation confirmation is satisfied; dispatch has not
-occurred. Global trust levels remain future UI/configuration presets that
-generate per-capability rules rather than overriding capability policy.
+Replay state is memory-only, scoped to one coordinator instance, and is not
+restart-safe or durable idempotency. Future event or journal persistence is
+required before replay protection can survive process restarts.
 
-Next milestone: **Policy-Gated Command Dispatch**. It has not started.
+Next milestone: **Game Event Foundation and Audit Records**. It has not started.
 
 
 

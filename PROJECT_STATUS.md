@@ -30,9 +30,10 @@ Game Engine Foundation
 
 
 
-Automation Policy and Approval Decisions. It is implemented as a pure,
-deterministic pre-dispatch boundary without changing `GameEngine.dispatch`,
-ToolAgent, managers, storage, Ollama, or Foundry paths.
+Policy-Gated Command Dispatch. The existing pure automation policy and approval
+gate are composed with `GameEngine` through one controlled synchronous
+coordinator without changing ToolAgent, managers, storage, Ollama, or Foundry
+paths.
 
 
 
@@ -151,6 +152,19 @@ execution using only temporary storage.
 that policy tests, the complete deterministic suite, and legacy smoke modules
 leave normal `data/` and `logs/` unchanged.
 
+\- The focused policy-gated dispatcher and dependency suite passes 36 tests
+covering every dispatch/no-dispatch outcome, internal policy evaluation,
+approval rejection, caller non-injection, preserved engine statuses, domain-
+negative output, replay and re-entry protection, immutable snapshots,
+controlled exceptions, serialization, result invariants, and dependency
+isolation.
+
+\- The complete focused engine suite passes 136 tests after the coordinator and
+combined result were added.
+
+\- The complete deterministic pytest suite passes 210 tests after the
+Policy-Gated Command Dispatch milestone was added.
+
 
 
 \## Implemented Functionality
@@ -239,6 +253,20 @@ authority, persistence, or executable behavior
 `AWAITING_APPROVAL`, `SUGGEST_ONLY`, `DENIED`, or fail-closed `INVALID` without
 calling the dispatcher or any handler
 
+\- A synchronous `PolicyGatedCommandDispatcher` that internally evaluates its
+configured immutable policy, resolves optional human approval, calls only
+`GameEngine.dispatch()` for a `READY` disposition, and never accepts a caller-
+supplied policy decision, automation mode, capability, or gate disposition
+
+\- An immutable `PolicyGatedDispatchResult` that distinguishes dispatched,
+awaiting, suggestion-only, denied, invalid, duplicate, and controlled
+coordinator-failure outcomes while preserving the exact controlled
+`GameResult` for attempted dispatch
+
+\- Process-local per-coordinator replay protection that records a ready command
+ID before engine dispatch, blocks repeated and re-entrant attempts, exposes only
+an immutable snapshot, and deliberately provides no restart durability
+
 
 
 \## Partially Implemented Functionality
@@ -258,8 +286,8 @@ model behavior remains nondeterministic and intentionally outside normal tests
 
 
 
-\- Policy-gated command dispatch that requires a `READY` disposition before the
-existing exact handler dispatch boundary
+\- Game event and audit-record persistence, including the durable journal needed
+for restart-safe replay protection
 
 \- Any later multi-step agent loop
 
@@ -274,7 +302,7 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**Policy-Gated Command Dispatch**. Integrate the completed gate disposition with
-the existing exact command dispatcher without starting game rules, events, or
-Foundry integration.
+**Game Event Foundation and Audit Records**. Add immutable game-event and audit
+record foundations plus journal-backed provenance without starting gameplay
+rules, Foundry integration, or unrelated systems.
 

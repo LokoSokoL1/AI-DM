@@ -9,6 +9,7 @@ def test_engine_package_has_only_standard_library_and_internal_dependencies():
         "ai",
         "foundry",
         "managers",
+        "rules",
         "storage",
         "tools",
     }
@@ -46,3 +47,29 @@ def test_automation_policy_has_no_dispatcher_or_external_engine_dependency():
     }
 
     assert relative_imports == {"_json", "command"}
+
+
+def test_policy_gated_dispatcher_uses_only_existing_engine_boundaries():
+    path = Path(__file__).resolve().parent / "policy_gated_dispatcher.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    relative_imports = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level > 0
+    }
+    accessed_attributes = {
+        node.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+    }
+
+    assert relative_imports == {
+        "_json",
+        "automation",
+        "command",
+        "game_engine",
+        "result",
+    }
+    assert "_handlers" not in accessed_attributes
+    assert "handler" not in accessed_attributes
