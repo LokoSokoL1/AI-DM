@@ -565,22 +565,58 @@ not dispatch through this engine yet.
 
 ## Trust and Optional Automation Boundary
 
-The intended future action flow is:
+The current pre-dispatch automation flow is:
 
-**intention → automation policy → suggest/confirm/execute/deny → game command dispatch → result/event**
+**GameCommand → AutomationPolicy → PolicyDecision → optional
+HumanApprovalDecision → GateDisposition**
 
-The automation policy and event boundary are not implemented in the current
-milestone. Command creation is not authorization, dispatch contains no approval
-decision, and an AI-created command is not automatically trusted. Provenance is
-preserved so the future policy can distinguish initiators without confusing
-identity with actor roles or permissions.
+This is a pure decision boundary. It does not call `GameEngine.dispatch()`, a
+handler, a tool, a manager, storage, an AI provider, a UI, or Foundry. Dispatch
+integration is deliberately deferred to the next milestone. A `READY`
+disposition means only that automation confirmation is satisfied; it does not
+mean permissions, game rules, command validation, dispatch, or execution have
+succeeded.
 
-Automation will be optional and configurable per capability. Global trust
-levels will be convenience presets only, not a replacement for capability-level
-configuration. The governing principle is that AI earns trust through observed
-behavior; it does not receive blanket authority merely because it generated an
-intention. Approval decisions, roles, permissions, events, and event persistence
-remain future boundaries outside `GameEngine`.
+`AutomationPolicy` uses the trusted exact `GameCommand.command_type` as its
+case-sensitive capability key. Policy configuration consists of explicitly
+configured capabilities, optional per-capability default modes, exact
+per-capability/per-initiator modes, and policy-wide initiator rules that apply
+only to configured capabilities. Precedence is:
+
+1. exact capability and initiator rule;
+2. capability default;
+3. policy-wide initiator rule for an explicitly configured capability;
+4. denial.
+
+Unknown capabilities are denied before policy-wide initiator rules are
+considered. Configured capabilities without an applicable rule are also denied.
+Payload fields are never consulted for automation mode, capability, approval,
+authorization, roles, or permissions, so a command cannot grant itself
+authority. Configuration is deeply immutable and has defensive
+JSON-compatible serialization.
+
+The four automation modes are `DENY`, `SUGGEST`, `REQUIRE_CONFIRMATION`, and
+`AUTOMATIC`. `PolicyDecision` preserves the command ID, exact capability,
+initiator kind and optional identity, actor ID, selected mode, stable reason
+code, safe explanation, and whether human confirmation is required.
+
+`HumanApprovalDecision` is an immutable matching-command record with an
+explicit `APPROVED` or `DENIED` outcome, a non-empty human approver identity,
+and an optional reason. Only records marked with human provenance are valid;
+AI self-approval is rejected. The record does not mutate the command, dispatch
+anything, establish DM/player authority, or persist approval state.
+
+`resolve_automation_gate()` returns an immutable disposition: `READY`,
+`AWAITING_APPROVAL`, `SUGGEST_ONLY`, `DENIED`, or a fail-closed `INVALID`
+state. Mismatched, malformed, or unnecessary approvals never make a command
+ready. The resolver contains no executable behavior.
+
+Automation remains optional and authoritative per capability. Future global
+trust levels will be UI/configuration presets that generate capability rules,
+not authority that overrides them. A preset may therefore produce automatic
+initiative, confirmed dice rolls, suggested token movement, and denied
+automatic damage in the same configuration. Roles, DM/player permission
+authority, persistence, events, and gameplay rules remain future boundaries.
 
 
 ## Tool Call Parsing Boundary

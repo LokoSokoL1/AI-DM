@@ -2,7 +2,7 @@
 
 
 
-\## Current Milestone - Game Engine Foundation: Commands and Results
+\## Current Milestone - Automation Policy and Approval Decisions
 
 
 
@@ -14,27 +14,27 @@ Scope:
 
 
 
-\- Add immutable provider-independent game commands with stable IDs, deeply
-immutable JSON-compatible payloads, provenance, and optional actor identity
+\- Add immutable `DENY`, `SUGGEST`, `REQUIRE_CONFIRMATION`, and `AUTOMATIC`
+automation modes
 
-\- Add immutable linked game results with explicit success, unknown-command,
-invalid-command, invalid-handler-result, and controlled-failure statuses
+\- Add a deeply immutable, defensive, case-sensitive per-capability policy with
+exact capability/initiator overrides and fail-closed defaults
 
-\- Add exact synchronous handler registration and one-attempt dispatch without
-retries, fallback handlers, approval decisions, or game rules
+\- Add immutable linked policy decisions, explicit human approval or denial
+records, and pure gate dispositions
 
-\- Preserve initiator provenance for a future optional capability-level
-automation policy without treating command creation as authorization
+\- Preserve initiator and actor identity without inferring roles or permission
+authority, and ignore command payload attempts to self-authorize
 
-\- Keep the existing ToolAgent, tools, managers, storage, Ollama validation, and
-Foundry paths unchanged
+\- Keep `GameEngine.dispatch`, ToolAgent, tools, managers, storage, Ollama,
+Foundry, and gameplay behavior unchanged
 
 
-Only test handlers exist in this milestone. No character, combat, dice,
-campaign, approval, event, or Foundry command has been introduced.
+`READY` means only that automation confirmation is satisfied; dispatch has not
+occurred. Global trust levels remain future UI/configuration presets that
+generate per-capability rules rather than overriding capability policy.
 
-Next milestone: **Automation Policy and Approval Decisions**. It has not
-started.
+Next milestone: **Policy-Gated Command Dispatch**. It has not started.
 
 
 

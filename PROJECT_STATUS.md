@@ -30,9 +30,9 @@ Game Engine Foundation
 
 
 
-Game Engine Foundation: Commands and Results. It is implemented and
-deterministically validated without changing the existing ToolAgent, manager,
-storage, Ollama, or Foundry paths.
+Automation Policy and Approval Decisions. It is implemented as a pure,
+deterministic pre-dispatch boundary without changing `GameEngine.dispatch`,
+ToolAgent, managers, storage, Ollama, or Foundry paths.
 
 
 
@@ -131,6 +131,26 @@ execution using only temporary storage.
 that the milestone's focused tests, complete deterministic suite, and legacy
 smoke modules leave normal `data/` and `logs/` unchanged.
 
+\- The focused automation policy and approval module passes 43 tests covering
+all modes and initiators, exact precedence, safe default and unknown-capability
+denial, case sensitivity, payload self-authorization resistance, immutable
+configuration, stable decisions, approval validation, every gate disposition,
+invalid and mismatched approvals, determinism, and non-dispatch behavior.
+
+\- The complete focused engine suite passes 102 tests, including a dependency
+test that limits the automation module to the command and immutable-JSON
+boundaries inside the standard-library-only engine package.
+
+\- The complete deterministic pytest suite passes 176 tests after the
+automation policy and approval boundary was added.
+
+\- The five isolated legacy smoke modules still pass through direct `python -m`
+execution using only temporary storage.
+
+\- Before/after paths, sizes, modification times, and SHA-256 hashes confirm
+that policy tests, the complete deterministic suite, and legacy smoke modules
+leave normal `data/` and `logs/` unchanged.
+
 
 
 \## Implemented Functionality
@@ -202,9 +222,22 @@ exposes an immutable sorted command-type snapshot, dispatches one handler once,
 and converts unknown commands, invalid handler results, and raised exceptions
 to controlled linked results
 
-\- A documented future trust boundary in which per-capability optional
-automation evaluates provenance before dispatch; global trust levels are presets
+\- An implemented trust boundary in which per-capability optional automation
+evaluates provenance before dispatch; future global trust levels are presets
 only, command creation is not authorization, and AI must earn trust
+
+\- Immutable `AutomationMode`, per-capability rules, and `AutomationPolicy`
+configuration with exact capability/initiator precedence, broader configured-
+capability defaults, case-sensitive matching, safe denial, and defensive JSON
+serialization
+
+\- Immutable linked `PolicyDecision` and `HumanApprovalDecision` records with
+stable reason codes, human-only approval provenance, and no roles, permission
+authority, persistence, or executable behavior
+
+\- A pure `resolve_automation_gate()` boundary returning `READY`,
+`AWAITING_APPROVAL`, `SUGGEST_ONLY`, `DENIED`, or fail-closed `INVALID` without
+calling the dispatcher or any handler
 
 
 
@@ -225,8 +258,8 @@ model behavior remains nondeterministic and intentionally outside normal tests
 
 
 
-\- Automation policy and approval decisions, including per-capability
-suggest/confirm/execute/deny configuration
+\- Policy-gated command dispatch that requires a `READY` disposition before the
+existing exact handler dispatch boundary
 
 \- Any later multi-step agent loop
 
@@ -241,7 +274,7 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**Automation Policy and Approval Decisions**. Define optional per-capability
-suggest/confirm/execute/deny decisions before game-command dispatch without
-starting game rules, events, or Foundry integration.
+**Policy-Gated Command Dispatch**. Integrate the completed gate disposition with
+the existing exact command dispatcher without starting game rules, events, or
+Foundry integration.
 

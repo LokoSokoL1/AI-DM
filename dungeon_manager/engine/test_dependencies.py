@@ -33,3 +33,16 @@ def test_engine_package_has_only_standard_library_and_internal_dependencies():
                     module.startswith("dungeon_manager.")
                     and module.split(".")[1] in forbidden_internal_packages
                 )
+
+
+def test_automation_policy_has_no_dispatcher_or_external_engine_dependency():
+    path = Path(__file__).resolve().parent / "automation.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    relative_imports = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level > 0
+    }
+
+    assert relative_imports == {"_json", "command"}
