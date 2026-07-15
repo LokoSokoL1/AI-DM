@@ -2,7 +2,7 @@
 
 
 
-\## Current Milestone - Policy-Gated Command Dispatch
+\## Current Milestone - Game Event Foundation and Audit Records
 
 
 
@@ -14,28 +14,31 @@ Scope:
 
 
 
-\- Compose the existing immutable automation policy, approval resolver, and
-`GameEngine` through one synchronous coordinator
+\- Add immutable, data-only `GameEvent` facts with stable IDs, schema versions,
+exact event types, command/provenance linkage, and canonical UTC occurrence
+times
 
-\- Expose one immutable combined result that preserves policy and gate
-provenance plus the exact `GameResult` only when dispatch was attempted
+\- Add immutable `CommandAuditRecord` traces with typed lifecycle stages, safe
+structured details, initiator provenance, actor identity, and canonical UTC
+recording times
 
-\- Dispatch only a `READY` gate disposition while preserving awaiting,
-suggestion, denial, invalid, duplicate, and controlled failure outcomes
+\- Add separate in-memory append-only game-event and command-audit journals with
+atomic sequence assignment, duplicate rejection, immutable snapshots, exact
+filtering, and defensive serialization
 
-\- Add per-coordinator process-local command-ID replay protection recorded
-before engine dispatch, including repeated and re-entrant submission blocking
+\- Preserve the boundary between command intention, policy or approval,
+handling result, world fact, and lifecycle audit trace
 
-\- Keep policy precedence, approval validation, handler resolution,
-`GameEngine.dispatch`, ToolAgent, tools, managers, storage, Ollama, Foundry, and
-gameplay behavior unchanged
+\- Keep `PolicyGatedCommandDispatcher`, `GameEngine.dispatch()`, handlers,
+ToolAgent, tools, managers, storage, Ollama, Foundry, and gameplay behavior
+unchanged
 
 
-Replay state is memory-only, scoped to one coordinator instance, and is not
-restart-safe or durable idempotency. Future event or journal persistence is
-required before replay protection can survive process restarts.
+Current journals are process-local and in-memory. They are not durable,
+tamper-evident, restart-replay storage, or integrated with dispatch or world
+state projection.
 
-Next milestone: **Game Event Foundation and Audit Records**. It has not started.
+Next milestone: **Audited Command Pipeline Integration**. It has not started.
 
 
 

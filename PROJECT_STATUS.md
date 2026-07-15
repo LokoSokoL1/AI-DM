@@ -30,10 +30,10 @@ Game Engine Foundation
 
 
 
-Policy-Gated Command Dispatch. The existing pure automation policy and approval
-gate are composed with `GameEngine` through one controlled synchronous
-coordinator without changing ToolAgent, managers, storage, Ollama, or Foundry
-paths.
+Game Event Foundation and Audit Records. Immutable world-fact events and
+command-lifecycle audit records now have separate process-local append-only
+journals without integration into dispatch, handlers, world state, ToolAgent,
+managers, storage, Ollama, or Foundry paths.
 
 
 
@@ -165,6 +165,19 @@ combined result were added.
 \- The complete deterministic pytest suite passes 210 tests after the
 Policy-Gated Command Dispatch milestone was added.
 
+\- The focused game-event, command-audit, journal, and dependency suite passes
+61 tests covering generated and explicit IDs, deterministic UTC time,
+structural validation, deep immutability, defensive serialization, typed audit
+stages, sequencing, insertion order, duplicate rollback, immutable snapshots,
+exact filtering, wrong-type rejection, distinct journals, and dependency
+isolation.
+
+\- The complete focused engine suite passes 194 tests after the game-event and
+command-audit foundations were added.
+
+\- The complete deterministic pytest suite passes 268 tests after the Game
+Event Foundation and Audit Records milestone was added.
+
 
 
 \## Implemented Functionality
@@ -267,6 +280,21 @@ coordinator-failure outcomes while preserving the exact controlled
 ID before engine dispatch, blocks repeated and re-entrant attempts, exposes only
 an immutable snapshot, and deliberately provides no restart durability
 
+\- Immutable `GameEvent` world facts with generated or explicit IDs, exact
+case-sensitive event types, positive schema versions, immutable payload and
+provenance, optional actor and originating-command linkage, and canonical UTC
+occurrence times
+
+\- Immutable `CommandAuditRecord` lifecycle traces with generated or explicit
+IDs, command linkage, typed `AuditStage`, non-empty outcomes, immutable
+initiator provenance and optional actor identity, optional safe structured
+details, and canonical UTC recording times
+
+\- Separate typed `GameEventJournal` and `CommandAuditJournal` in-memory
+append-only containers with atomic sequence assignment from 1, duplicate-ID
+rejection without sequence gaps, insertion-ordered immutable snapshots, exact
+filters, and defensive serialized copies
+
 
 
 \## Partially Implemented Functionality
@@ -286,8 +314,11 @@ model behavior remains nondeterministic and intentionally outside normal tests
 
 
 
-\- Game event and audit-record persistence, including the durable journal needed
-for restart-safe replay protection
+\- Audited command pipeline integration that creates safe lifecycle audit
+records and true world events at the appropriate existing boundaries
+
+\- Durable, tamper-evident event and audit storage plus any restart-safe replay
+protection; the current journals are in-memory only
 
 \- Any later multi-step agent loop
 
@@ -302,7 +333,8 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**Game Event Foundation and Audit Records**. Add immutable game-event and audit
-record foundations plus journal-backed provenance without starting gameplay
-rules, Foundry integration, or unrelated systems.
+**Audited Command Pipeline Integration**. Connect the existing policy-gated
+command lifecycle to safe audit recording and true post-handling world events
+without starting persistence, gameplay rules, Foundry integration, or unrelated
+systems.
 

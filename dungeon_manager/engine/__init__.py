@@ -1,4 +1,6 @@
-"""Provider-independent command, policy, and result game-engine boundary."""
+"""Provider-independent command, policy, result, event, and audit boundary."""
+
+from .audit import AuditStage, CommandAuditRecord
 
 from .automation import (
     ApprovalOutcome,
@@ -16,6 +18,13 @@ from .automation import (
 
 from .command import CommandProvenance, CommandSource, GameCommand
 from .game_engine import CommandHandler, GameEngine
+from .game_event import GameEvent
+from .journals import (
+    CommandAuditJournal,
+    CommandAuditJournalEntry,
+    GameEventJournal,
+    GameEventJournalEntry,
+)
 from .policy_gated_dispatcher import (
     PolicyGatedCommandDispatcher,
     PolicyGatedDispatchResult,
@@ -25,14 +34,21 @@ from .result import GameResult, GameResultStatus
 
 __all__ = [
     "ApprovalOutcome",
+    "AuditStage",
     "AutomationMode",
     "AutomationPolicy",
     "CapabilityAutomationRule",
     "CommandHandler",
+    "CommandAuditJournal",
+    "CommandAuditJournalEntry",
+    "CommandAuditRecord",
     "CommandProvenance",
     "CommandSource",
     "GameCommand",
     "GameEngine",
+    "GameEvent",
+    "GameEventJournal",
+    "GameEventJournalEntry",
     "GameResult",
     "GameResultStatus",
     "GateDisposition",

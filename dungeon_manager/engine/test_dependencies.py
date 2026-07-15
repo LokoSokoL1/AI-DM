@@ -73,3 +73,24 @@ def test_policy_gated_dispatcher_uses_only_existing_engine_boundaries():
     }
     assert "_handlers" not in accessed_attributes
     assert "handler" not in accessed_attributes
+
+
+def test_event_and_audit_foundations_have_only_data_boundary_dependencies():
+    package_root = Path(__file__).resolve().parent
+    expected_relative_imports = {
+        "_time.py": set(),
+        "game_event.py": {"_json", "_time", "command"},
+        "audit.py": {"_json", "_time", "command"},
+        "journals.py": {"_json", "audit", "game_event"},
+    }
+
+    for filename, expected in expected_relative_imports.items():
+        path = package_root / filename
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        relative_imports = {
+            node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.level > 0
+        }
+
+        assert relative_imports == expected

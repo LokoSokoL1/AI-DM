@@ -665,6 +665,58 @@ and policy evaluation, gate resolution, dispatch, and handlers are each
 attempted at most once per submission.
 
 
+## Game Event and Command Audit Foundation
+
+The engine boundary now distinguishes five related concepts:
+
+- A `GameCommand` is an intention.
+- A policy or approval decision determines whether that intention may proceed.
+- A `GameResult` describes command validation and handling.
+- A `GameEvent` records a fact that occurred in the game world.
+- A `CommandAuditRecord` explains one decision or execution stage.
+
+Denied, suggested, awaiting, invalid, failed, or merely proposed commands may
+produce audit records after a future integration milestone, but they must not
+produce game events claiming that a world change occurred. Neither record type
+executes behavior, changes world state, dispatches, or accesses handlers,
+managers, storage, AI, tools, rules, Foundry, or the live command pipeline.
+
+`GameEvent` is immutable data with a generated or explicit stable event ID, an
+exact case-sensitive event type, positive schema version, deeply immutable
+JSON-compatible payload, immutable `CommandProvenance`, optional actor and
+originating-command IDs, and an aware occurrence time normalized to canonical
+UTC. `CommandAuditRecord` similarly has a generated or explicit audit-record
+ID, command ID and exact command type, non-empty outcome, immutable initiator
+provenance, optional actor identity, optional deeply immutable JSON-object
+details, and a canonical UTC recording time. Their independent `to_dict()`
+representations serialize timestamps with a `Z` suffix and cannot mutate the
+records.
+
+`AuditStage` provides stable future lifecycle names for command proposal,
+policy evaluation, approval evaluation or recording, gate resolution, blocked
+dispatch, attempted dispatch, completed dispatch, and coordinator failure.
+Audit details are supplied explicitly as already-safe structured data; records
+do not automatically capture exception text, tracebacks, credentials, full AI
+prompts or responses, or hidden campaign information, and arbitrary non-JSON
+objects are rejected. Audit visibility, role authority, and permission policy
+are not implemented.
+
+`GameEventJournal` and `CommandAuditJournal` are separate typed append-only
+in-memory containers. Each assigns insertion-order sequence numbers starting at
+1, rejects duplicate IDs and the other journal's record type, and uses a small
+standard-library lock plus copy-on-write immutable state so a failed append
+does not alter entries or consume a sequence number. Immutable snapshots retain
+insertion order; exact filters cover event type, originating command ID,
+command ID, and typed audit stage; serialized lists are defensive copies.
+There is no update, delete, reorder, replacement, subscriber, queue, event bus,
+or persistence API.
+
+These journals are process-local foundations only. They are not durable,
+tamper-evident, restart-replay storage, or integrated with
+`PolicyGatedCommandDispatcher`, `GameEngine.dispatch()`, handlers, or world
+state projection.
+
+
 ## Tool Call Parsing Boundary
 
 The Tool Call Parser is a standalone part of the AI layer. It inspects one
