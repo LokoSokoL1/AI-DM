@@ -30,7 +30,7 @@ AI Core
 
 
 
-Legacy Test Data Isolation. It is implemented and deterministically
+Single-Tool Observation/Response Loop. It is implemented and deterministically
 tested.
 
 
@@ -51,14 +51,22 @@ preservation, and confirmation that failures do not retry or invoke another tool
 `CharacterTools`, `CharacterManager`, and temporary JSON storage without touching
 normal project data.
 
-\- The ToolAgent integration has 15 deterministic tests covering ordinary text,
-valid calls with and without arguments, malformed JSON, unknown tools, invalid
-arguments, tool exceptions, unchanged successful output, provider call counts,
-prompt/tool discovery, provider-error propagation, and the real registry with
-temporary storage.
+\- The ToolAgent integration has 19 deterministic tests covering ordinary text,
+malformed requests, valid calls with and without arguments, stable observation
+JSON, unknown tools, invalid arguments, controlled tool failures, domain-level
+failure output, provider call limits, single parsing and execution, final text
+preservation, post-execution provider failure, unsafe output, prompt/tool
+discovery, and the real registry with temporary storage.
 
-\- The complete deterministic pytest suite passes 47 tests: the previous 42
-tests plus five legacy-isolation regression tests.
+\- A valid tool-call attempt produces exactly one delimited, versioned JSON
+observation and one final provider request. JSON-looking final text is not parsed
+or executed.
+
+\- Post-execution observation serialization and provider failures preserve the
+completed `ToolExecutionResult`, return controlled typed failures, and never
+retry or execute the tool again.
+
+\- The complete deterministic pytest suite passes 51 tests.
 
 \- The five legacy modules now provide assertion-based pytest coverage for model
 serialization, JSON storage, the campaign manager, character tools, and the tool
@@ -106,22 +114,19 @@ lookup, tool execution, or game-state changes
 \- A typed, standalone Tool Executor that resolves through the central registry,
 validates callable arguments, executes once, and preserves normal tool output
 
-\- A typed, single-pass `ToolAgent` integration that makes one provider request,
-parses the complete response, avoids execution for ordinary or malformed
-responses, and invokes the existing executor once for a valid call
+\- A typed, bounded `ToolAgent` integration that preserves one-provider behavior
+for ordinary or malformed responses and performs one parse, one execution, one
+structured observation, and one final provider request for a valid call
 
-\- `ToolAgentResult`, which preserves the raw response and distinguishes an
-ordinary assistant response, a malformed tool request, and a completed tool
-execution attempt with its parsed call and unchanged executor observation
+\- `ToolAgentResult`, which preserves the raw initial response, parsed call,
+unchanged executor result, and final response, with distinct controlled outcomes
+for unsafe observation serialization and post-execution provider failure
 
 
 
 \## Partially Implemented Functionality
 
 
-
-\- `ToolAgent` returns a structured observation but does not yet send that
-observation back to the model for a final assistant response
 
 \- Ollama communication is implemented but is not covered by deterministic tests
 
@@ -135,7 +140,7 @@ observation back to the model for a final assistant response
 
 
 
-\- A single-tool observation/response loop
+\- A stable tool schema and initial prompt contract
 
 \- Any later multi-step agent loop
 
@@ -150,7 +155,6 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**Single-Tool Observation/Response Loop**. Send one completed tool observation
-back to the provider for one final assistant response without adding multiple
-tool calls, retries, recursive autonomy, permissions, or memory.
+**Tool Schema and Prompt Contract**. Define stable tool descriptions and the
+initial model-facing prompt contract without starting multi-tool autonomy.
 

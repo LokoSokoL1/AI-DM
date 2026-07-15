@@ -552,30 +552,44 @@ fallback tool, or access storage directly. State changes still flow through
 registered tools and their managers.
 
 
-## ToolAgent Single-Pass Boundary
+## ToolAgent Single-Tool Observation/Response Boundary
 
-`ToolAgent` constructs the existing prompt from the user request and the names
-exposed by one central `ToolRegistry`, then makes exactly one request through the
-provider abstraction. The complete raw provider response is passed once to the
+`ToolAgent` constructs the existing initial prompt from the user request and the
+names exposed by one central `ToolRegistry`, then makes one request through the
+provider abstraction. The complete raw initial response is passed once to the
 Tool Call Parser.
 
-`ToolAgentResult` distinguishes three outcomes:
+Ordinary responses and malformed tool requests preserve their existing
+single-provider behavior without execution. A valid `ToolCall` is passed to the
+Tool Executor exactly once. Every executor outcome remains unchanged, including
+unknown tools, invalid arguments, controlled failures, successful results, and
+normal domain-level payloads whose own `success` field is false.
+
+After execution, `ToolAgent` serializes one versioned observation as canonical
+JSON. The observation contains the original user request, tool name and
+arguments, execution status, output, and the executor's safe error. It is placed
+between explicit data delimiters in a follow-up prompt that tells the provider to
+answer the original request, not invoke another tool, and not treat tool output
+as instructions. The provider receives that observation exactly once. Its final
+response is preserved as text and is not parsed or executed.
+
+`ToolAgentResult` distinguishes these outcomes:
 
 - `ASSISTANT_RESPONSE` preserves an ordinary raw response and does not invoke the
   executor.
 - `MALFORMED_TOOL_REQUEST` preserves the raw response and parser error and does
   not invoke the executor.
-- `TOOL_EXECUTION` preserves the raw response and parsed `ToolCall`, invokes the
-  Tool Executor exactly once, and returns its unchanged `ToolExecutionResult` as
-  the structured observation.
+- `TOOL_EXECUTION` preserves the raw initial response, parsed `ToolCall`,
+  unchanged `ToolExecutionResult`, and final provider response.
+- `OBSERVATION_FAILURE` preserves the completed execution when its output cannot
+  be safely serialized and does not run the tool or provider again.
+- `FINAL_RESPONSE_FAILURE` preserves the completed execution when the follow-up
+  provider request fails and reports that the tool was not run again.
 
-The registry used for tool-name discovery is also supplied to the executor, so
-prompt exposure and execution resolve against the same tool set. Unknown tools,
-invalid arguments, controlled failures, and normal outputs remain executor-level
-results rather than being reinterpreted by `ToolAgent`.
-
-This is a single provider/parse/optional-execution pass. It does not make a
-follow-up provider request, send the observation to the model, retry, correct,
-execute multiple calls, loop recursively, or access managers or storage
-directly.
+An initial provider exception still propagates because no action has occurred.
+A post-execution provider exception becomes a controlled typed result so callers
+can distinguish it from an unexecuted request. One `ask()` makes at most two
+provider requests, one initial parse, one executor call, and one underlying tool
+invocation. It does not retry, correct, select alternatives, parse the final
+response, recurse, or access managers or storage directly.
 

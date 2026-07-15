@@ -2,7 +2,7 @@
 
 
 
-\## Current Milestone - Legacy Test Data Isolation
+\## Current Milestone - Single-Tool Observation/Response Loop
 
 
 
@@ -14,21 +14,21 @@ Scope:
 
 
 
-\- Make all five legacy smoke modules create and clean their own temporary storage
+\- Preserve one-request behavior for ordinary and malformed provider responses
 
-\- Replace print-only smoke checks with assertion-based pytest coverage
+\- Execute one valid parsed tool call exactly once through the existing executor
 
-\- Inject temporary storage through storage, manager, tool, and registry paths
+\- Send one deterministic structured execution observation to the provider
 
-\- Preserve production storage defaults, data formats, and application behavior
+\- Preserve the raw initial response, parsed call, unchanged execution result,
+and final provider response in a typed result
 
-\- Verify direct module execution cannot change normal project data or logs
+\- Handle post-execution serialization and provider failures without retries or
+re-execution
 
 
 
-Next milestone: **Single-Tool Observation/Response Loop**. Send one completed
-tool observation back to the provider for one final assistant response. That loop
-has not started.
+Next milestone: **Tool Schema and Prompt Contract**. It has not started.
 
 
 
