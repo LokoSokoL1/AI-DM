@@ -7,8 +7,8 @@ class CharacterTools(BaseTool):
     Tools available for AI character management.
     """
 
-    def __init__(self):
-        self.manager = CharacterManager()
+    def __init__(self, manager=None):
+        self.manager = manager if manager is not None else CharacterManager()
 
     def get_tools(self):
         return {

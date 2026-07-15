@@ -7,8 +7,8 @@ class CampaignManager:
     Handles campaign creation and storage.
     """
 
-    def __init__(self):
-        self.storage = JSONStorage()
+    def __init__(self, storage=None):
+        self.storage = storage if storage is not None else JSONStorage()
 
     def create_campaign(
         self,

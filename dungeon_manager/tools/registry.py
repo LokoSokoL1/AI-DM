@@ -6,9 +6,13 @@ class ToolRegistry:
     Central registry for AI accessible tools.
     """
 
-    def __init__(self):
+    def __init__(self, character_tools=None):
 
-        self.character_tools = CharacterTools()
+        self.character_tools = (
+            character_tools
+            if character_tools is not None
+            else CharacterTools()
+        )
 
 
     def get_tools(self):

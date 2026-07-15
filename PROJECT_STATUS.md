@@ -30,7 +30,7 @@ AI Core
 
 
 
-ToolAgent Parser/Executor Integration. It is implemented and deterministically
+Legacy Test Data Isolation. It is implemented and deterministically
 tested.
 
 
@@ -57,16 +57,19 @@ arguments, tool exceptions, unchanged successful output, provider call counts,
 prompt/tool discovery, provider-error propagation, and the real registry with
 temporary storage.
 
-\- The complete deterministic pytest suite passes 42 tests: the previous 27
-parser/executor tests plus the 15 ToolAgent integration tests.
+\- The complete deterministic pytest suite passes 47 tests: the previous 42
+tests plus five legacy-isolation regression tests.
 
-\- Existing deterministic smoke scripts successfully exercise the data models,
-JSON storage, campaign manager, character tools, and tool registry.
+\- The five legacy modules now provide assertion-based pytest coverage for model
+serialization, JSON storage, the campaign manager, character tools, and the tool
+registry using temporary directories.
 
-\- The legacy smoke scripts pass when run from isolated temporary storage.
+\- Direct `python -m` execution of each legacy module creates and cleans its own
+temporary storage without an external wrapper.
 
-\- The existing smoke scripts are executable checks rather than assertion-based
-automated tests.
+\- Before/after file lists, content hashes, and modification times confirm that
+direct smoke execution and deterministic pytest leave normal `data/` and `logs/`
+unchanged.
 
 \- The Ollama smoke script requires a running external service and is not part of
 deterministic automated testing.
@@ -88,6 +91,12 @@ deterministic automated testing.
 \- Character, Item, and Campaign managers
 
 \- Character create/load tools and a central tool registry
+
+\- Backward-compatible dependency injection for campaign and character storage,
+character tools, and the tool registry while preserving production defaults
+
+\- Intrinsically isolated assertion-based legacy smoke modules that clean their
+own temporary storage
 
 \- AI provider interface, Ollama provider, and AI manager
 

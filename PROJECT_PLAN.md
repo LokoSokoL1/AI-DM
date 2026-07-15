@@ -2,7 +2,7 @@
 
 
 
-\## Current Milestone - ToolAgent Parser/Executor Integration
+\## Current Milestone - Legacy Test Data Isolation
 
 
 
@@ -14,17 +14,15 @@ Scope:
 
 
 
-\- Make one provider request through the existing provider abstraction
+\- Make all five legacy smoke modules create and clean their own temporary storage
 
-\- Parse the complete provider response with the existing Tool Call Parser
+\- Replace print-only smoke checks with assertion-based pytest coverage
 
-\- Return typed ordinary-response, malformed-request, or tool-execution results
+\- Inject temporary storage through storage, manager, tool, and registry paths
 
-\- Execute one valid call through the existing Tool Executor and shared registry
+\- Preserve production storage defaults, data formats, and application behavior
 
-\- Preserve the raw response, parsed call, and unchanged executor observation
-
-\- Avoid follow-up provider calls, retries, loops, and direct storage access
+\- Verify direct module execution cannot change normal project data or logs
 
 
 
