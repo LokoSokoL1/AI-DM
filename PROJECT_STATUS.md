@@ -30,8 +30,7 @@ AI Core
 
 
 
-Tool Call Parser. It is implemented in the current working tree and covered by
-deterministic automated tests.
+Tool Execution. It is implemented and deterministically tested.
 
 
 
@@ -43,8 +42,21 @@ deterministic automated tests.
 arguments, ordinary responses, malformed JSON, invalid fields, whole-response
 JSON fences, non-object JSON, and refusal to search prose for embedded JSON.
 
+\- The Tool Executor has deterministic tests for argument forwarding, empty
+arguments, unknown tools, invalid arguments, controlled exceptions, output
+preservation, and confirmation that failures do not retry or invoke another tool.
+
+\- An isolated integration test covers `ToolCall` through `ToolRegistry`,
+`CharacterTools`, `CharacterManager`, and temporary JSON storage without touching
+normal project data.
+
+\- The complete deterministic pytest suite passes 27 tests, including the 10
+Tool Executor tests.
+
 \- Existing deterministic smoke scripts successfully exercise the data models,
 JSON storage, campaign manager, character tools, and tool registry.
+
+\- The legacy smoke scripts pass when run from isolated temporary storage.
 
 \- The existing smoke scripts are executable checks rather than assertion-based
 automated tests.
@@ -75,6 +87,9 @@ deterministic automated testing.
 \- A typed, standalone Tool Call Parser that validates structure without registry
 lookup, tool execution, or game-state changes
 
+\- A typed, standalone Tool Executor that resolves through the central registry,
+validates callable arguments, executes once, and preserves normal tool output
+
 
 
 \## Partially Implemented Functionality
@@ -96,8 +111,6 @@ response, but it does not parse responses or execute tools
 
 
 
-\- Tool execution based on validated parser output
-
 \- Parser and execution integration with `ToolAgent`
 
 \- The full agent loop
@@ -113,5 +126,7 @@ work described in `PROJECT_PLAN.md`
 
 
 
-Tool Execution. It has not been started as part of the Tool Call Parser milestone.
+ToolAgent Parser/Executor Integration. Connect provider responses to parsing and
+one controlled execution/observation flow without adding retries, permissions,
+memory, or other full-agent-loop features.
 

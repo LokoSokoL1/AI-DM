@@ -2,11 +2,11 @@
 
 
 
-\## Current Milestone - Tool Call Parser
+\## Current Milestone - Tool Execution
 
 
 
-Status: Implemented in the current working tree with deterministic automated tests.
+Status: Implemented and deterministically tested.
 
 
 
@@ -14,20 +14,21 @@ Scope:
 
 
 
-\- Inspect one complete AI response for a canonical JSON tool request
+\- Accept an already validated typed `ToolCall`
 
-\- Return a typed valid tool call, no-tool-call result, or malformed result
+\- Resolve and execute one tool through the central `ToolRegistry`
 
-\- Validate the tool name and arguments object
+\- Return typed success, unknown-tool, invalid-argument, or tool-failure results
 
-\- Accept one clean whole-response Markdown JSON code fence
+\- Preserve normal tool output for later use as an observation
 
-\- Remain separate from registry lookup, execution, and game-state changes
+\- Avoid retries, AI-provider calls, and direct storage access
 
 
 
-Next milestone: Tool Execution. Parser integration with `ToolAgent` and the full
-agent loop remain planned and have not started.
+Next milestone: ToolAgent Parser/Executor Integration. Connect provider responses
+to parsing and one controlled execution/observation flow. `ToolAgent` integration
+and the complete agent loop remain planned and have not started.
 
 
 

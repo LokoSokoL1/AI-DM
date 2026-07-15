@@ -532,3 +532,22 @@ response; it does not scan surrounding prose for embedded JSON.
 Parsing does not look up the tool registry, execute a tool, modify game state, or
 change `ToolAgent` behavior. Those responsibilities belong to later milestones.
 
+
+## Tool Execution Boundary
+
+The Tool Executor is a standalone, synchronous part of the AI layer. It accepts
+an already validated `ToolCall`, resolves the named callable through the central
+`ToolRegistry`, validates its arguments against that callable's signature, and
+delegates one execution attempt back to the registry.
+
+Execution returns a typed result that distinguishes success, an unknown tool,
+invalid arguments, and a controlled tool failure. A normal tool return is
+preserved unchanged as successful execution, including domain-level payloads
+whose own `success` field is false. Raised exceptions are logged internally and
+converted to safe error text without exposing tracebacks to callers.
+
+The executor does not parse AI text, call an AI provider, retry tools, choose a
+fallback tool, or access storage directly. State changes still flow through
+registered tools and their managers. `ToolAgent` does not yet use the parser or
+executor; that integration remains a later milestone.
+
