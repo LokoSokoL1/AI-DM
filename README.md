@@ -152,3 +152,26 @@ Current development target:
 
 \- Voice-controlled gameplay
 
+
+\---
+
+\# Deliberate Local Ollama Validation
+
+The live bounded-tool-loop validator is excluded from normal deterministic
+testing and requires an explicit environment-variable opt-in. From the project
+root in PowerShell:
+
+```
+$env:DUNGEON_MANAGER_RUN_LIVE_OLLAMA = "1"
+try {
+    & .\.venv\Scripts\python.exe -B -m dungeon_manager.ai.live_tool_loop_validation
+} finally {
+    Remove-Item Env:\DUNGEON_MANAGER_RUN_LIVE_OLLAMA -ErrorAction SilentlyContinue
+}
+```
+
+The command uses only the configured loopback Ollama endpoint and installed
+model, stores character data in a temporary directory, does not configure the
+project file logger, performs no retries, prints one structured JSON report, and
+deletes its temporary data when finished.
+

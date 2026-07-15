@@ -2,11 +2,11 @@
 
 
 
-\## Current Milestone - Tool Schema and Prompt Contract
+\## Current Milestone - Local Ollama End-to-End Tool-Loop Validation
 
 
 
-Status: Implemented and deterministically tested.
+Status: Implemented and validated against the configured local Ollama model.
 
 
 
@@ -14,21 +14,24 @@ Scope:
 
 
 
-\- Define immutable provider-neutral specifications for every registered tool
+\- Keep live validation deliberately opt-in and outside the deterministic suite
 
-\- Keep character tool names, descriptions, argument schemas, and examples close
-to their implementation
+\- Use the configured Ollama provider and model through the real bounded
+`ToolAgent` loop
 
-\- Reject malformed, duplicate, or callable-inconsistent registrations
+\- Exercise ordinary response, character creation, existing-character load, and
+missing-character load scenarios exactly once per live run
 
-\- Build the initial model prompt from a deterministic JSON tool catalog
+\- Inject temporary JSON storage and avoid normal project data and logs
 
-\- Preserve the parser, executor, observation loop, storage defaults, and call
-limits
+\- Report initial/final model responses, classifications, execution results,
+call counts, storage snapshots, and failure reasons as structured JSON
 
 
+The first live run passed all four required scenarios using `qwen2.5:32b`
+without a prompt correction or rerun.
 
-Next milestone: **Local Ollama End-to-End Tool-Loop Validation**. It has not
+Next milestone: **Game Engine Foundation: Commands and Results**. It has not
 started.
 
 

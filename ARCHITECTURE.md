@@ -624,3 +624,32 @@ provider requests, one initial parse, one executor call, and one underlying tool
 invocation. It does not retry, correct, select alternatives, parse the final
 response, recurse, or access managers or storage directly.
 
+
+## Opt-In Local Ollama Validation Boundary
+
+`dungeon_manager.ai.live_tool_loop_validation` is a standalone validation
+harness, not a pytest entry point. It exits before loading configuration unless
+`DUNGEON_MANAGER_RUN_LIVE_OLLAMA=1` is set deliberately.
+The older `dungeon_manager.ai.test_tool_agent` module delegates to this same
+guarded entry point and no longer constructs default project storage.
+
+The harness verifies that the configured provider is Ollama, the endpoint is
+loopback-local, and the exact configured model tag is already present in
+Ollama's local tag catalog. It does not install Ollama, pull models, change the
+model, or contact a non-loopback host. `AIManager` then constructs the real
+`OllamaProvider` used by `ToolAgent`.
+
+One injected `TemporaryDirectory` supplies `JSONStorage` through the real
+`CharacterManager`, `CharacterTools`, and `ToolRegistry`. Project logger setup is
+not called. Thin counting wrappers record provider, executor, registry, and
+underlying-tool invocations while delegating every operation unchanged; they do
+not retry, repair, parse around, or directly invoke a tool in place of the
+model.
+
+Each live run attempts the four fixed validation scenarios once and emits one
+structured JSON report containing raw initial responses, typed classifications,
+requested arguments, execution observations, final responses, per-scenario call
+counts, temporary-storage snapshots, and failure reasons. The report is printed
+to the caller and is not persisted by the harness. Temporary character data is
+removed when the run ends, including on scenario failure.
+

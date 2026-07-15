@@ -30,8 +30,8 @@ AI Core
 
 
 
-Tool Schema and Prompt Contract. It is implemented and deterministically
-tested.
+Local Ollama End-to-End Tool-Loop Validation. It is implemented and validated
+against the configured local provider and model.
 
 
 
@@ -88,7 +88,27 @@ unchanged.
 \- The Ollama smoke script requires a running external service and is not part of
 deterministic automated testing.
 
-\- No Ollama request was made while verifying this milestone.
+\- No Ollama request was made while verifying the preceding deterministic Tool
+Schema and Prompt Contract milestone.
+
+\- The opt-in live validator passed its first clean run against Ollama `0.31.2`
+at `http://localhost:11434` using the installed `qwen2.5:32b` model tag.
+
+\- The live run passed ordinary response, create-character,
+load-existing-character, and load-missing-character scenarios without manual
+response repair, retries, parser bypasses, prompt changes, or a second run.
+
+\- The four live scenarios made exactly seven provider calls, three executor
+calls, three registry executions, and three underlying tool calls. The tool
+calls were one `create_character` and two `load_character` invocations.
+
+\- Character creation and both loads used one injected temporary JSON storage
+root. The created character was present only there during validation, and the
+temporary directory was removed after the run.
+
+\- The reusable harness has two deterministic tests for its explicit opt-in
+guard and its isolated real-component wiring. The complete deterministic suite
+passes 74 tests.
 
 
 
@@ -140,13 +160,23 @@ single-call and ordinary-response rules
 unchanged executor result, and final response, with distinct controlled outcomes
 for unsafe observation serialization and post-execution provider failure
 
+\- A standalone live Ollama validator that performs a loopback/model preflight,
+uses `AIManager` to construct the configured provider, instruments exact call
+counts without changing behavior, injects temporary JSON storage through the
+real managers/tools/registry, emits one structured JSON report, and never
+retries
+
+\- The legacy Ollama smoke-module command now delegates to the guarded live
+validator and cannot use normal project storage as an alternate path
+
 
 
 \## Partially Implemented Functionality
 
 
 
-\- Ollama communication is implemented but is not covered by deterministic tests
+\- Ollama communication has one successful local live-validation result; live
+model behavior remains nondeterministic and intentionally outside normal tests
 
 \- The tool layer currently exposes only character create/load operations
 
@@ -157,8 +187,6 @@ for unsafe observation serialization and post-execution provider failure
 \## Planned Functionality
 
 
-
-\- Local Ollama end-to-end validation of the existing single-tool loop
 
 \- Any later multi-step agent loop
 
@@ -173,6 +201,7 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**Local Ollama End-to-End Tool-Loop Validation**. Validate the existing bounded
-tool loop against the configured local provider without expanding autonomy.
+**Game Engine Foundation: Commands and Results**. Define the provider-neutral
+command and result boundary for deterministic game-engine work without starting
+broader rules-system functionality.
 
