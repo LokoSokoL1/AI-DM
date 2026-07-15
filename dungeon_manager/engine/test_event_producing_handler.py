@@ -26,6 +26,8 @@ from .policy_gated_dispatcher import (
     PolicyGatedDispatchStatus,
 )
 from .result import GameResult, GameResultStatus
+from .world_state import WorldState, WorldStateProjector
+from .world_state_holder import WorldStateHolder
 
 
 COMMAND_TYPE = "test.produce_events"
@@ -100,11 +102,22 @@ def audited_pipeline(
     published_events = (
         GameEventJournal() if event_journal is None else event_journal
     )
+    projector = WorldStateProjector()
+    for number in (1, 2, 3):
+        projector.register_reducer(
+            f"world.test_event_{number}",
+            1,
+            lambda state, event: state,
+        )
     ids = itertools.count(1)
     pipeline = AuditedCommandPipeline(
         dispatcher,
         audit_journal,
         published_events,
+        projector,
+        WorldStateHolder(
+            WorldState(last_sequence=len(published_events.entries))
+        ),
         audit_record_id_factory=lambda: f"audit-events-{next(ids):03d}",
         clock=lambda: FIXED_UTC,
     )

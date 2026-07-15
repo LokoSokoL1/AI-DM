@@ -30,11 +30,13 @@ Game Engine Foundation
 
 
 
-World State Projection Foundation. The new standalone `WorldStateProjector`
-materializes and validates complete ordered game-event journal-entry snapshots,
-resolves reducers by exact event type and schema version, and derives immutable
-`WorldState` data through atomic full replay or incremental projection. It is
-not integrated with event publication or `AuditedCommandPipeline`.
+World State Projection Pipeline Integration. `AuditedCommandPipeline` now
+coordinates dispatch, atomic event publication, projection of exactly the
+returned sequenced journal entries, and complete committed-state replacement
+through an explicit process-local `WorldStateHolder`. Projection failure leaves
+published events present and the previous state unchanged, marks synchronization
+out of sync, and blocks later dispatch. The standalone `WorldStateProjector`
+remains pure and stateless.
 
 
 
@@ -242,6 +244,20 @@ Projection Foundation was added.
 \- The complete deterministic pytest suite passes 408 tests after the World
 State Projection Foundation was added.
 
+\- The focused world-state projection-pipeline and dependency suite passes 30
+tests covering explicit synchronized and mismatched starts, eventless results,
+one and multiple ordered entries, incremental commands, blocked and duplicate
+submissions, publication and reducer failures, unknown event/schema handling,
+state preservation, replay consumption, out-of-sync blocking, later audit
+failure, immutable snapshots, defensive serialization, sanitization,
+concurrency, re-entrancy, no retry, no rebuild, and strict dependencies.
+
+\- The complete focused engine suite passes 357 tests after World State
+Projection Pipeline Integration was added.
+
+\- The complete deterministic pytest suite passes 431 tests after World State
+Projection Pipeline Integration was added.
+
 \- The five isolated legacy smoke modules still pass through direct `python -m`
 execution using only temporary storage.
 
@@ -423,6 +439,32 @@ output, and reducer failure with safe payload-free diagnostics
 projection remains pure, process-local derived computation with only test
 reducers and no automatic execution
 
+\- An explicit process-local `WorldStateHolder` that accepts one initial
+immutable state, exposes immutable snapshots and payload-free synchronization
+health, commits only complete successful projections, and provides no public
+mutation, rollback, recovery, or rebuild API
+
+\- Construction-time and pre-dispatch journal-tail agreement checks that mark
+projection out of sync and fail closed before handlers, replay consumption,
+event publication, or reducers can run
+
+\- Explicit projector and state-holder dependencies in `AuditedCommandPipeline`,
+with projection limited to the authoritative immutable entries returned by one
+successful event-journal batch publication
+
+\- A typed `NOT_APPLICABLE`, `UNCHANGED`, `PROJECTED`, `FAILED`, or `UNAVAILABLE`
+projection disposition with only controlled status/reason/error and sequence
+metadata; complete world-state data remains available only from the holder
+
+\- One synchronous outer coordination boundary that serializes complete
+pipeline submissions, preserves journal/projection order without lost updates,
+and rejects same-thread re-entrant invocation before dispatch without deadlock
+
+\- Non-transactional failure ordering in which publication failure skips
+projection, projection failure preserves events/replay and the previous state
+while blocking later dispatch, and successful event/state updates survive a
+later audit failure without rollback or retry
+
 
 
 \## Partially Implemented Functionality
@@ -442,9 +484,8 @@ model behavior remains nondeterministic and intentionally outside normal tests
 
 
 
-\- World State Projection Pipeline Integration that may explicitly compose the
-existing publication and projection boundaries without adding persistence,
-subscribers, queues, gameplay rules, or Foundry integration
+\- World State Projection Recovery and Rebuild, without adding durable storage,
+subscriptions, queues, gameplay rules, or Foundry integration
 
 \- Durable, tamper-evident event and audit storage plus any restart-safe replay
 protection; the current journals are in-memory only
@@ -462,8 +503,7 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**World State Projection Pipeline Integration**. Explicitly integrate the
-existing projection foundation with the audited event-publication flow without
-starting persistence, subscribers, queues, gameplay rules, UI, or Foundry
-integration.
+**World State Projection Recovery and Rebuild**. Add an explicit future recovery
+boundary for an unavailable/out-of-sync projection without starting durable
+storage, subscriptions, queues, gameplay rules, UI, or Foundry integration.
 

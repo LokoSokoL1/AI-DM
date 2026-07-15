@@ -738,14 +738,14 @@ optional audited integration described below, and an explicitly injected
 same pipeline. Neither journal performs world-state projection.
 
 
-## Audited Command Pipeline and Event Publication Integration
+## Audited Command Pipeline, Event Publication, and Projection Integration
 
 The optional audited and event-publication flow is:
 
 **GameCommand → AuditedCommandPipeline → PolicyGatedCommandDispatcher →
 policy and approval gate → optional GameEngine.dispatch() → preserved
-PolicyGatedDispatchResult → atomic GameEventJournal publication + audit
-integration result**
+PolicyGatedDispatchResult → atomic GameEventJournal publication → exact-entry
+WorldState projection → controlled audit integration result**
 
 `AuditedCommandPipeline` accepts a `GameCommand` and optional
 `HumanApprovalDecision`, delegates the complete behavioral submission to the
@@ -755,10 +755,15 @@ injected `CommandAuditJournal`. It also requires an explicitly injected
 from a preserved `DISPATCHED` result through one `append_batch()` call. It does
 not evaluate policy, resolve approvals, manage replay state, select a handler,
 call a handler, reinterpret a `GameResult`, or repeat dispatch after a
-publication failure. The dispatcher's existing public API and unaudited
-behavior remain unchanged. A private synchronous lifecycle-recorder protocol
-exposes only the actual policy, gate, blocked, pre-engine, post-engine, and
-coordinator-failure boundaries needed by the optional integration.
+publication or projection failure. The pipeline now also requires one explicit
+`WorldStateProjector` and `WorldStateHolder`. It projects only the immutable
+sequenced entries returned by the successful batch publication, starting from
+the holder's latest committed snapshot; it does not reconstruct journal entries
+from events or duplicate reducer selection and validation. The dispatcher's
+existing public API and unaudited behavior remain unchanged. A private
+synchronous lifecycle-recorder protocol exposes only the actual policy, gate,
+blocked, pre-engine, post-engine, and coordinator-failure boundaries needed by
+the optional integration.
 
 Applicable records are appended in logical order: command proposed, policy
 evaluated, approval evaluated when supplied or required, gate resolved,
@@ -774,7 +779,9 @@ reason code, approval outcome and approver identity, gate disposition and
 reason code, policy-gated dispatch status, and final `GameResult.status`.
 When event publication fails, one existing coordinator-failure audit stage may
 be attempted with only the stable publication phase, typed disposition, and
-event count.
+event count. Projection failure records use that same stage with only the
+projection phase and disposition, controlled reason and projector status,
+previous and target sequences, and event count.
 Command payloads, approval reasons, handler output, result error text, raw
 exceptions and tracebacks, prompts, responses, credentials, and hidden campaign
 content, including event payloads, are not copied automatically. Command
@@ -796,25 +803,52 @@ tuple on that result. Event payloads are not copied into audit details or
 publication errors. Record IDs and UTC times come from injectable synchronous
 factories; production defaults use UUIDs and the existing UTC clock boundary.
 
+The result additionally carries a typed projection disposition:
+`NOT_APPLICABLE`, `UNCHANGED`, `PROJECTED`, `FAILED`, or `UNAVAILABLE`.
+Projection metadata is limited to the previous, target, and resulting committed
+sequences, a controlled reason code, the typed projector status, and safe error
+text. Complete world-state data is available only through the holder's immutable
+`snapshot` API and is never copied into audit details or projection errors.
+
+`WorldStateHolder` owns one explicit initial immutable `WorldState`, exposes its
+snapshot and payload-free synchronization health, and has no public mutation,
+patch, delete, rollback, recovery, or rebuild API. Pipeline construction compares
+the state's last sequence with the event-journal tail. A mismatch marks the
+holder out of sync and makes submissions unavailable; each later coordinated
+submission rechecks the tail before dispatch. A successful complete projection
+is the only operation that replaces the committed state. A failed projection
+leaves the prior snapshot unchanged and irreversibly marks this process-local
+holder out of sync for this milestone.
+
 The audit-failure boundary is the engine call. Every required pre-dispatch
 append, including `DISPATCH_ATTEMPTED`, must succeed before replay is consumed
 and before `GameEngine.dispatch()` is called. A failure therefore closes the
 gate without handler invocation. Once the engine boundary is crossed, a later
 audit failure preserves the original dispatch result and consumed replay state.
 Validated result events are published atomically before the final
-`DISPATCH_COMPLETED` audit append, so a failure there cannot suppress or roll
-back a successful event batch. Publication failure leaves the entire new batch
-absent, preserves completed dispatch and consumed replay state, and is not
-retried; reusing the command ID is therefore a duplicate and does not republish.
-The event and audit journals are deliberately not transactionally coupled: once
-dispatch occurs, an audit append or event publication can succeed independently
-of the other, and neither successful append is rolled back. No failure path
-reinvokes the engine, dispatcher, handler, or publication operation.
+`DISPATCH_COMPLETED` audit append. Successful publication is immediately
+followed by projection of exactly its returned entries while the pipeline's one
+outer coordination lock remains held. A non-reentrant thread-local guard rejects
+same-thread recursive invocation before policy evaluation or replay consumption;
+other concurrent callers wait and then project from the state committed by the
+preceding call. This keeps journal and projection order identical and prevents
+lost state updates.
+
+Publication failure leaves the entire new batch absent, preserves completed
+dispatch and consumed replay state, skips projection, and is not retried.
+Projection failure leaves published entries present, preserves completed
+dispatch and replay state, leaves the prior committed state unchanged, marks
+projection out of sync, and blocks every later submission before engine
+dispatch. Successful publication and projection survive a later audit failure.
+The audit journal, event journal, and committed world state are deliberately not
+transactionally coupled: once dispatch occurs, successful event/state or audit
+updates are never rolled back. No failure path reinvokes the engine, dispatcher,
+handler, publication operation, or reducer.
 
 Auditing, event publication, and replay protection remain process-local and
 non-durable. They do not provide restart-safe idempotency or publication
-recovery, persistence, tamper evidence, queues, transactions, retries, or world
-state projection.
+recovery, persistence, tamper evidence, queues, transactions, retries, or
+automatic world-state recovery/rebuild.
 
 
 ## World State Projection Foundation
@@ -860,10 +894,11 @@ type, unsupported schema version, invalid reducer result, and reducer failure.
 Reducer purity is a contract: reducers must not mutate journals, dispatch,
 access managers or storage, call AI, or perform other side effects. The
 framework supplies immutable inputs and isolates returned state, but Python
-cannot prove that a callable has no external effects. Projection is not wired
-into `AuditedCommandPipeline`; publishing an event never runs a projection
-automatically. Persistence, subscribers, transactions, real gameplay reducers,
-rules, tools, UI, and Foundry integration remain outside this foundation.
+cannot prove that a callable has no external effects. The projector itself
+remains pure and stateless; the audited integration described above coordinates
+its explicit invocation after publication. Persistence, recovery/rebuild,
+subscribers, transactions, real gameplay reducers, rules, tools, UI, and
+Foundry integration remain outside this foundation.
 
 
 ## Tool Call Parsing Boundary

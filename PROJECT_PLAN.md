@@ -2,7 +2,7 @@
 
 
 
-\## Current Milestone - World State Projection Foundation
+\## Current Milestone - World State Projection Pipeline Integration
 
 
 
@@ -14,32 +14,39 @@ Scope:
 
 
 
-\- Add immutable `WorldState` data with deeply frozen JSON-object content,
-defensive serialization, and the last successfully applied journal sequence
+\- Add an explicit process-local `WorldStateHolder` for one immutable committed
+snapshot plus payload-free synchronized/out-of-sync health
 
-\- Register synchronous reducers by exact case-sensitive event type and exact
-positive schema version, with strict callable-shape validation and immutable
-sorted registration snapshots
+\- Require the current state sequence and injected event-journal tail to agree
+at pipeline construction and before each dispatch, failing closed on mismatch
 
-\- Materialize and completely validate ordered `GameEventJournalEntry`
-snapshots, including contiguous incremental sequence rules and duplicate event
-IDs, before invoking any reducer
+\- Extend `AuditedCommandPipeline` with explicit projector and state-holder
+dependencies while leaving policy, replay, dispatch, publication, and reducer
+rules authoritative in their existing components
 
-\- Resolve every reducer before applying events once in journal order, with no
-fallback, retry, skip, migration, or partial-state exposure
+\- After successful atomic publication, project exactly the immutable sequenced
+journal entries returned by that publication and commit only a complete
+successful projection
 
-\- Return typed immutable results for success, invalid input, unknown event
-type, unsupported schema version, invalid reducer data, and reducer failure
-using safe payload-free diagnostics
+\- Serialize pipeline submissions through one synchronous non-reentrant
+coordination boundary so concurrent calls preserve journal/projection order and
+recursive calls fail before dispatch
 
-\- Keep projection pure, in-memory, and separate from event publication and the
-`AuditedCommandPipeline`
+\- Return typed `NOT_APPLICABLE`, `UNCHANGED`, `PROJECTED`, `FAILED`, or
+`UNAVAILABLE` projection disposition with sequence-only, controlled status,
+reason, and safe error metadata
+
+\- Preserve published events and replay consumption on projection failure,
+leave the previous state unchanged, mark projection out of sync, and block later
+dispatch until a future explicit recovery boundary exists
 
 
-Only test reducers exist. Current tools, managers, AI routing, rules, storage,
-UI, Foundry behavior, event publication, and command dispatch remain unchanged.
+Only test reducers and synthetic events exist. Current tools, managers, AI
+routing, rules, storage, UI, Foundry behavior, and unaudited command dispatch
+remain unchanged. Audit, event, and state updates remain deliberately
+non-transactional and process-local.
 
-Next milestone: **World State Projection Pipeline Integration**. It has not
+Next milestone: **World State Projection Recovery and Rebuild**. It has not
 started.
 
 

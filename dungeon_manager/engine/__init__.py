@@ -7,6 +7,7 @@ from .audited_pipeline import (
     AuditedCommandPipelineResult,
     AuditIntegrationStatus,
     EventPublicationDisposition,
+    ProjectionDisposition,
 )
 
 from .automation import (
@@ -46,6 +47,12 @@ from .world_state import (
     WorldStateProjector,
     WorldStateReducer,
 )
+from .world_state_holder import (
+    ProjectionReasonCode,
+    WorldStateHealth,
+    WorldStateHolder,
+    WorldStateSynchronizationStatus,
+)
 
 __all__ = [
     "ApprovalOutcome",
@@ -79,11 +86,16 @@ __all__ = [
     "PolicyGatedDispatchResult",
     "PolicyGatedDispatchStatus",
     "PolicyReasonCode",
+    "ProjectionDisposition",
+    "ProjectionReasonCode",
     "ReducerRegistration",
     "WorldState",
+    "WorldStateHealth",
+    "WorldStateHolder",
     "WorldStateProjectionResult",
     "WorldStateProjectionStatus",
     "WorldStateProjector",
     "WorldStateReducer",
+    "WorldStateSynchronizationStatus",
     "resolve_automation_gate",
 ]

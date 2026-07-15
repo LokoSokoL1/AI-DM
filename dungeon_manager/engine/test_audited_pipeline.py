@@ -26,6 +26,8 @@ from .policy_gated_dispatcher import (
     PolicyGatedDispatchStatus,
 )
 from .result import GameResult, GameResultStatus
+from .world_state import WorldState, WorldStateProjector
+from .world_state_holder import WorldStateHolder
 
 
 FIXED_UTC = datetime(2026, 7, 15, 14, 30, 45, 123456, timezone.utc)
@@ -110,6 +112,10 @@ def build_pipeline(
         dispatcher,
         selected_journal,
         selected_event_journal,
+        WorldStateProjector(),
+        WorldStateHolder(
+            WorldState(last_sequence=len(selected_event_journal.entries))
+        ),
         audit_record_id_factory=(
             sequential_ids()
             if audit_record_id_factory is None
@@ -575,6 +581,8 @@ def test_unexpected_integration_failure_is_controlled_and_sanitized():
         dispatcher,
         journal,
         GameEventJournal(),
+        WorldStateProjector(),
+        WorldStateHolder(WorldState.initial()),
         audit_record_id_factory=sequential_ids(),
         clock=lambda: FIXED_UTC,
     )
