@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document describes the architecture implemented on develop through First Playable Vertical Slice Milestone 6. Future work is labelled explicitly. The frozen product behavior is in [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md).
+This document describes the architecture implemented on develop through all seven First Playable Vertical Slice milestones. Future work is labelled explicitly. The frozen product behavior is in [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md).
 
 Dungeon Manager is local first. The deterministic engine is authoritative for validated game actions and facts; AI components are clients, not state authorities; Foundry VTT is the intended presentation layer and is not implemented yet.
 
@@ -153,6 +153,25 @@ The implemented one-way flow is:
       -> narration-only provider
       -> transient presentation text
 
+### End-to-end first playable acceptance
+
+Milestone 7 exercises the production composition boundaries rather than private
+handlers or reducers: explicit fixture initialization, runtime load and
+hydration, durable character selection, controlled-combat composition, staged
+manual or injected automatic controlled-round resolution, SQLite append,
+local publication, projection, verified narration, shutdown, and fresh runtime
+hydration. The two deterministic journeys cover Nekria-first surviving and
+goblin-first terminal outcomes. They prove that one aggregate event is durable
+before local publication, narration receives only its immutable verified packet,
+and narration remains transient.
+
+The original runtime graph is released before restart. Fresh composition uses
+new JSONStorage and EventJournalStore objects at the durable paths and rebuilds
+the same structured event and projected facts without dice, dispatch, combat,
+append, provider, ToolAgent, parser, registry, executor, tool, narration replay,
+or repair. This is a headless engine-level acceptance proof; it does not add UI,
+Foundry, or voice.
+
 ## Atomicity and failure behavior
 
 - Policy or approval rejection occurs before handler dispatch and event creation.
@@ -182,4 +201,10 @@ The implemented one-way flow is:
 
 ## Future architecture
 
-The exact next unstarted slice milestone is **Milestone 7 — End-to-End First Playable Validation**. General narration, narration persistence or replay, semantic fact-checking of arbitrary prose, general rules, goblin tactics, Foundry integration, UI, voice, durable audit, restart-safe replay protection, snapshots, migration/repair, background work, and cross-process coordination remain future work.
+All seven frozen slice milestones are complete. No unstarted milestone remains in
+this slice; a separately planned next development phase would be required before
+work resumes. General narration, narration persistence or replay, semantic
+fact-checking of arbitrary prose, general rules, goblin tactics, Foundry
+integration, UI, voice, durable audit, restart-safe replay protection, snapshots,
+migration/repair, background work, and cross-process coordination remain future
+work.

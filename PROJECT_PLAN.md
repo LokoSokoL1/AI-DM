@@ -24,11 +24,17 @@ The accepted product sequence is defined by [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V
 6. **Durable Complete-Round Restart Proof — completed and verified.**
    One completed controlled round is hydrated twice through genuinely fresh runtime composition from existing fixture files and the SQLite journal only. Durable facts and projected state agree exactly; dice, dispatch, append, narration, tools, retries, and repair do not occur during hydration.
 
-7. **End-to-End First Playable Validation — next, unstarted.**
+7. **End-to-End First Playable Validation — completed and verified.**
+   Two headless public-composition journeys prove staged manual and injected
+   automatic dice through selection, one durable controlled round, projection,
+   verified transient narration, shutdown, and fresh durable hydration.
 
 ## Current boundary
 
-The exact next milestone is **Milestone 7 — End-to-End First Playable Validation**. It has not started. Milestone 6 does not persist narration, replay it on restart, make audit or replay safeguards durable, or begin Milestone 7.
+All seven accepted slice milestones are complete. There is no unstarted
+milestone in this frozen slice; later development requires separate planning.
+The completed acceptance proof does not persist or replay narration or make
+audit and replay safeguards durable.
 
 General D&D rules, goblin tactics, movement, spellcasting, Foundry control, UI, voice, campaign discovery, editors, migrations, repair, background work, and cross-process coordination remain outside the completed slice scope unless explicitly scheduled.
 

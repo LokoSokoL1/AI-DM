@@ -3,11 +3,11 @@
 ## Checkpoint
 
 - Branch: develop
-- Checkpoint scope: the accumulated First Playable Vertical Slice implementation through Milestone 6, plus reconciled canonical documentation
-- Completed slice milestone: **Milestone 6 — Durable Complete-Round Restart Proof**
-- Exact next unstarted milestone: **Milestone 7 — End-to-End First Playable Validation**
+- Checkpoint scope: the completed seven-milestone First Playable Vertical Slice, plus canonical documentation
+- Completed slice milestone: **Milestone 7 — End-to-End First Playable Validation**
+- Next development phase: requires separate planning; no unstarted milestone remains in the frozen slice
 
-No Milestone 7 implementation, UI, voice, or Foundry integration is part of this checkpoint.
+The headless engine-level first playable is complete. UI, voice, and Foundry integration are not part of this checkpoint.
 
 ## Implemented behavior
 
@@ -27,7 +27,7 @@ No Milestone 7 implementation, UI, voice, or Foundry integration is part of this
 - Audited command coordination, atomic event batches, append-only in-memory event and audit journals, world-state projection, synchronization health, and explicit recovery/rebuild.
 - Identity-checked SQLite EventJournalStore with durable-before-memory publication and all-or-nothing startup hydration into fresh in-memory journal and projection objects.
 
-### First Playable Vertical Slice Milestones 1–6
+### First Playable Vertical Slice Milestones 1–7
 
 - Explicit V1 fixture identities for campaign vertical-slice-v1, journal vertical-slice-v1-events, scene controlled-goblin-encounter, Nekria, and goblin-1.
 - All-or-nothing fixture loading; Nekria is the only selectable player character. Selection creates one durable event and is restart safe.
@@ -45,17 +45,21 @@ No Milestone 7 implementation, UI, voice, or Foundry integration is part of this
 - A completed controlled round has been restart-proven by discarding the original runtime graph and loading two independent fresh runtimes from the existing JSON fixture files and SQLite journal only.
 - Each fresh hydration reproduces event identity, sequence, ordering, payload, selected character, initiative, controlled goblin advancement, attack, damage, hit points, defeat, final turn, completion state, and synchronized tails without dice, dispatch, append, narration, tools, replay, inference, or repair.
 - Fixture files plus the SQLite database and WAL when present are compared after the original SQLite operation is complete. The `-shm` sidecar is process-local SQLite coordination state and is not claimed as durable campaign content.
+- Two end-to-end acceptance journeys exercise the public fixture, runtime,
+  selection, controlled-round, SQLite publication, projection, verified
+  narration, shutdown, and fresh-hydration boundaries. Manual input remains
+  eventless until complete; automatic dice consume only their required faces.
 
 ## Verified milestone coverage
 
-Milestones 1–6 of the accepted seven-milestone slice are implemented and verified. The tests cover exact fixture identity and validation, selection durability, manual and automatic dice, immutable combat data, both initiative orders, tie-breaking, staged input requests, hit/miss/lethal outcomes, aggregate event publication, projection, failure atomicity, idempotency, restart reconstruction, narration eligibility, exact source binding, provider isolation, narration failure containment, disposal of the original runtime graph, and repeated durable-only hydration.
+All seven milestones of the accepted vertical slice are implemented and verified. The tests cover exact fixture identity and validation, selection durability, manual and automatic dice, immutable combat data, both initiative orders, tie-breaking, staged input requests, hit/miss/lethal outcomes, aggregate event publication, projection, failure atomicity, idempotency, restart reconstruction, narration eligibility, exact source binding, provider isolation, narration failure containment, disposal of the original runtime graph, repeated durable-only hydration, and end-to-end public-composition acceptance journeys.
 
 ## Verification
 
-- Focused Milestone 6 durable complete-round restart proof: **3 passed**.
-- Directly affected runtime, controlled-round, journal, projection, hydration, narration, pipeline, and dependency suite: **186 passed**.
-- Complete engine suite: **535 passed**.
-- Complete deterministic pytest suite: **607 passed**, with dungeon_manager/ai/test_live_tool_loop_validation.py explicitly excluded.
+- Focused Milestone 7 end-to-end first-playable acceptance: **2 passed**.
+- Directly affected runtime, controlled-round, journal, projection, hydration, narration, pipeline, and dependency suite: **188 passed**.
+- Complete engine suite: **537 passed**.
+- Complete deterministic pytest suite: **609 passed**, with dungeon_manager/ai/test_live_tool_loop_validation.py explicitly excluded.
 - Five isolated legacy smoke modules: **passed** for models, storage, managers, tools, and registry.
 - Normal data/ and logs/ manifest: **unchanged** by path, type, size, UTC modification timestamp, and SHA-256.
 - Live validator, Ollama, and all external AI providers: **not invoked**.
@@ -67,7 +71,8 @@ The two deterministic guard tests stored in dungeon_manager/ai/test_live_tool_lo
 - Narration is implemented only for the single verified controlled-round event. It does not provide semantic proof of unrestricted provider prose, general event narration, persistence, streaming, retry, fallback, or automatic replay after restart.
 - ToolAgent and tools are not part of the narration path and remain disconnected from controlled combat.
 - Process-local audit history, replay guards, provider history, narration text, and Python object identity do not survive restart; no new persistence mechanism was added for them.
-- Milestone 7 is unstarted.
+- All seven frozen slice milestones are complete; a separate plan is required for
+  any later development phase.
 - The slice is one fixed campaign, one selectable player character, one hostile goblin, one permitted rapier attack, and one aggregate controlled-round event.
 - Goblin tactical behavior is deliberately absent; the goblin-first path records only the accepted no-action advancement.
 - Foundry VTT integration, UI, voice, general D&D rules, movement, spells, campaign discovery, editors, and broader content systems are not implemented.
@@ -77,4 +82,5 @@ The two deterministic guard tests stored in dungeon_manager/ai/test_live_tool_lo
 
 ## Next milestone
 
-**Milestone 7 — End-to-End First Playable Validation** is the exact next unstarted GDD milestone. Do not begin it without a separate implementation request.
+No unstarted milestone remains in the frozen seven-milestone slice. Any next
+development phase requires separate planning and is not started here.

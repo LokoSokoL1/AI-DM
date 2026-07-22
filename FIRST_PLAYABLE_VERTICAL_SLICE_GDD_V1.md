@@ -6,8 +6,9 @@ implemented in seven deliberately bounded milestones.
 Implementation status: Milestone 1, Campaign Runtime and Controlled Fixture
 Foundation; Milestone 2, Deterministic Dice Foundation; Milestone 3, Minimal
 Combat Domain; Milestone 4, Player Attack Resolution; Milestone 5, Verified AI
-DM Narration Boundary; and Milestone 6, Durable Complete-Round Restart Proof
-are implemented and verified. The dice primitive remains independently
+DM Narration Boundary; Milestone 6, Durable Complete-Round Restart Proof; and
+Milestone 7, End-to-End First Playable Validation are implemented and verified.
+The dice primitive remains independently
 reusable, while Milestone 4 composes it into the one controlled durable sequence
 described below.
 
@@ -97,6 +98,24 @@ state and is not treated as durable campaign content. Command-audit history,
 replay guards, narration/provider history, and Python object identity remain
 process-local and are deliberately not claimed to survive restart.
 
+### Milestone 7 end-to-end acceptance clarification
+
+The completed headless engine-level loop is acceptance-validated only through
+its public composition boundaries. A staged manual journey proves every missing
+face is non-durable until the complete controlled round succeeds; an injected
+automatic journey proves the fixed dice-consumption order without manual input.
+Together they cover Nekria-first survival, goblin-first controlled no-action
+advancement, terminal defeat, durable-before-local publication, synchronized
+projection, and one verified transient narration attempt from the exact source
+event.
+
+Each acceptance journey discards the original runtime graph and constructs a
+fresh runtime from only the fixture files and SQLite journal. Hydration restores
+the same authoritative event and projected facts without dice, dispatch,
+combat, append, provider, ToolAgent, tool, narration replay, inference, or
+repair. This validates the frozen slice's headless engine loop; it does not add
+UI, Foundry, voice, or broader gameplay.
+
 Implementation sequence:
 
 1. Campaign Runtime and Controlled Fixture Foundation — implemented and verified.
@@ -105,7 +124,10 @@ Implementation sequence:
 4. Player Attack Resolution — implemented after verification.
 5. Verified AI DM Narration Boundary — implemented after verification.
 6. Durable Complete-Round Restart Proof — implemented after verification.
-7. End-to-End First Playable Validation — next, unstarted.
+7. End-to-End First Playable Validation — implemented and verified.
+
+All seven frozen vertical-slice milestones are complete. No unstarted milestone
+remains in this slice; later development requires separate planning.
 
 Excluded until explicitly scheduled: general D&D rules, initiative beyond the
 controlled encounter, random generation, damage/HP/conditions, goblin tactics,
