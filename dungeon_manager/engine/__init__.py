@@ -27,6 +27,13 @@ from .automation import (
 from .command import CommandProvenance, CommandSource, GameCommand
 from .game_engine import CommandHandler, GameEngine
 from .game_event import GameEvent
+from .event_journal_store import (
+    EVENT_JOURNAL_STORAGE_FORMAT,
+    EVENT_JOURNAL_STORAGE_SCHEMA_VERSION,
+    EventJournalStore,
+    EventJournalStoreResult,
+    EventJournalStoreStatus,
+)
 from .journals import (
     CommandAuditJournal,
     CommandAuditJournalEntry,
@@ -75,6 +82,11 @@ __all__ = [
     "CommandProvenance",
     "CommandSource",
     "EventPublicationDisposition",
+    "EVENT_JOURNAL_STORAGE_FORMAT",
+    "EVENT_JOURNAL_STORAGE_SCHEMA_VERSION",
+    "EventJournalStore",
+    "EventJournalStoreResult",
+    "EventJournalStoreStatus",
     "GameCommand",
     "GameEngine",
     "GameEvent",

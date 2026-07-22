@@ -30,14 +30,14 @@ Game Engine Foundation
 
 
 
-World State Projection Recovery and Rebuild. `AuditedCommandPipeline` now
-provides an explicit synchronous recovery entry point using the same outer
-coordination boundary as command publication and projection. Typed catch-up and
-full-rebuild strategies recover only from one authoritative immutable
-`GameEventJournal` snapshot, commit state and health atomically after an
-unchanged-tail check, and never dispatch commands, publish events, create audit
-records, or retry reducers. The standalone `WorldStateProjector` remains pure
-and stateless.
+Durable Event Journal Persistence Foundation. `EventJournalStore` is an
+explicit path-bound SQLite boundary for immutable sequenced
+`GameEventJournalEntry` batches. It stores journal identity, format, and schema
+metadata; uses WAL plus full synchronous SQLite transactions; rejects stale
+tails and duplicate IDs; and exposes complete immutable snapshots only after
+strict canonical event, sequence, identity, and digest validation. It remains
+standalone: it neither replaces JSON entity storage nor integrates with the
+pipeline, startup hydration, audit persistence, or world-state persistence.
 
 
 
@@ -519,8 +519,10 @@ model behavior remains nondeterministic and intentionally outside normal tests
 
 
 
-\- Durable Event Journal Persistence Foundation; the current event and audit
-journals, replay protection, and world-state recovery remain process-local only
+\- Durable Event Journal Pipeline Integration and Startup Hydration; the new
+SQLite store remains standalone and current pipeline publication, in-memory
+journal hydration, audit persistence, and world-state persistence remain out of
+scope
 
 \- Any later multi-step agent loop
 
@@ -535,7 +537,7 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**Durable Event Journal Persistence Foundation**. It has not started; this
-milestone does not add storage, migrations, campaign loading, repair, rollback,
-queues, subscriptions, gameplay rules, UI, or Foundry integration.
+**Durable Event Journal Pipeline Integration and Startup Hydration**. It has
+not started; it must integrate the existing durable store deliberately without
+adding migrations, repair, retries, gameplay rules, UI, or Foundry integration.
 

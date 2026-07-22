@@ -737,6 +737,39 @@ optional audited integration described below, and an explicitly injected
 `GameEventJournal` receives validated dispatched result events through that
 same pipeline. Neither journal performs world-state projection.
 
+## Durable Event Journal Persistence Foundation
+
+`EventJournalStore` is a separate, explicitly initialized SQLite storage
+boundary for immutable `GameEventJournalEntry` batches. It does not replace the
+JSON storage used for characters, campaigns, items, or other entity models, and
+it has no default project `data/` path. Each database has immutable logical
+metadata: a caller-supplied or generated journal ID, the exact storage-format
+identifier, and an integer schema version. Missing files are not empty
+journals, existing files cannot be reinitialized through the store, and
+unsupported formats or schema versions fail closed without migration.
+
+Every persisted row contains its assigned sequence, event ID, compact
+deterministic canonical `GameEvent` JSON, and a SHA-256 digest of the sequence
+plus canonical representation. The digest detects accidental corruption; it is
+not cryptographic authentication and does not defend against a malicious
+database writer. Loading validates all metadata and every row before exposing
+one immutable snapshot: sequence continuity from one, event-ID uniqueness, row
+identity, digest, and strict constructor-based event decoding. Any bad row
+returns a controlled corruption result with no partial history and no repair,
+rewrite, truncation, or migration.
+
+Append accepts already-sequenced immutable journal entries and an expected
+durable tail. It fully materializes and validates the batch, takes one SQLite
+write transaction with WAL and full synchronous commits, validates the complete
+durable history inside that transaction, rejects a stale tail or any duplicate
+event ID, then inserts the whole contiguous range or rolls it back. Empty
+batches are successful only at the matching tail. Connections and cursors are
+operation-scoped; SQLite and filesystem failures become safe typed results with
+no raw exceptions, SQL, paths, or event payloads. This standalone store does
+not yet persist pipeline publication, hydrate an in-memory journal at startup,
+coordinate commands across processes, persist audit records, or persist world
+state.
+
 
 ## Audited Command Pipeline, Event Publication, and Projection Integration
 
