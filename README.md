@@ -1,177 +1,32 @@
-\# Dungeon Manager
+# Dungeon Manager
 
+Dungeon Manager is a local-first tabletop RPG system for running persistent campaigns with a trustworthy AI Dungeon Master backed by a deterministic game engine.
 
+The player chooses; the AI interprets and performs the Dungeon Master role; the engine validates, resolves, and remembers authoritative game facts. Foundry VTT is the intended visual tabletop for maps, tokens, sheets, lighting, and effects. It is not the rules or campaign-state authority, and Foundry integration has not yet been implemented.
 
-Dungeon Manager is an AI-powered tabletop RPG assistant designed to act as a Game Master while integrating with virtual tabletops such as Foundry VTT.
+## Current stage
 
+The project is implementing the accepted seven-milestone First Playable Vertical Slice. Milestones 1–4 are complete and deterministically verified: the controlled campaign fixture, manual and automatic dice foundation, minimal Nekria-versus-goblin combat domain, and one durable player-attack round.
 
+The exact next unstarted milestone is **Milestone 5 — Verified AI DM Narration Boundary**. No Milestone 5 implementation is included in this checkpoint.
 
-The goal is to create a modular system that can:
+## Documentation
 
+- [GDD.md](GDD.md) — master product vision and design philosophy.
+- [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md) — frozen executable behavior and seven-milestone slice sequence.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — implemented technical boundaries, flows, ownership, and failure behavior.
+- [PROJECT_PLAN.md](PROJECT_PLAN.md) — accepted milestone order and current next step.
+- [PROJECT_STATUS.md](PROJECT_STATUS.md) — verified implementation and test status.
+- [DOCUMENTATION.md](DOCUMENTATION.md) — documentation inventory, authority, and navigation, including research-record status.
 
+## Local-first operation
 
-\- Run tabletop campaigns locally
+Campaign records and configuration are locally controlled. The current durable event authority is a local SQLite journal; process-local projections are rebuilt from it. The optional Ollama validation harness is separate from deterministic verification and runs only with explicit opt-in.
 
-\- Use local AI models
+## Development verification
 
-\- Manage characters, NPCs, items, worlds, and adventures
+Use the repository virtual environment:
 
-\- Track campaign memory
+    .\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider --ignore=dungeon_manager/ai/test_live_tool_loop_validation.py
 
-\- Integrate with virtual tabletops
-
-\- Support homebrew content
-
-\- Eventually provide voice interaction and advanced automation
-
-
-
-\---
-
-
-
-\# Current Development Status
-
-
-
-The project is currently in the foundation stage.
-
-
-
-Completed:
-
-
-
-\- Repository setup
-
-\- Development branch setup
-
-\- Initial architecture planning
-
-\- Project structure creation
-
-
-
-Current focus:
-
-
-
-\- Creating the Python foundation
-
-\- Connecting to local AI models
-
-\- Building the Dungeon Manager core
-
-
-
-\---
-
-
-
-\# Design Philosophy
-
-
-
-Dungeon Manager separates responsibilities:
-
-
-
-The AI handles:
-
-
-
-\- Storytelling
-
-\- NPC dialogue
-
-\- Creative generation
-
-\- Interpretation
-
-
-
-The application handles:
-
-
-
-\- Rules
-
-\- Data storage
-
-\- Character management
-
-\- Items
-
-\- World state
-
-\- Campaign memory
-
-
-
-\---
-
-
-
-\# Initial Technology
-
-
-
-Current development target:
-
-
-
-\- Python
-
-\- Ollama
-
-\- Qwen 2.5 32B
-
-\- Foundry VTT integration
-
-\- Local-first operation
-
-
-
-\---
-
-
-
-\# Long Term Goals
-
-
-
-\- AI Game Master
-
-\- Campaign management
-
-\- Automated Foundry control
-
-\- Map and scene assistance
-
-\- Homebrew management
-
-\- Voice-controlled gameplay
-
-
-\---
-
-\# Deliberate Local Ollama Validation
-
-The live bounded-tool-loop validator is excluded from normal deterministic
-testing and requires an explicit environment-variable opt-in. From the project
-root in PowerShell:
-
-```
-$env:DUNGEON_MANAGER_RUN_LIVE_OLLAMA = "1"
-try {
-    & .\.venv\Scripts\python.exe -B -m dungeon_manager.ai.live_tool_loop_validation
-} finally {
-    Remove-Item Env:\DUNGEON_MANAGER_RUN_LIVE_OLLAMA -ErrorAction SilentlyContinue
-}
-```
-
-The command uses only the configured loopback Ollama endpoint and installed
-model, stores character data in a temporary directory, does not configure the
-project file logger, performs no retries, prints one structured JSON report, and
-deletes its temporary data when finished.
-
+The live validator, Ollama, Foundry, UI, and external AI providers are not required for the deterministic suite.

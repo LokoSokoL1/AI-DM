@@ -1,1188 +1,168 @@
-\# Dungeon Manager Architecture
+# Dungeon Manager Architecture
 
+## Status and scope
 
+This document describes the architecture implemented on develop through First Playable Vertical Slice Milestone 4. Future work is labelled explicitly. The frozen product behavior is in [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md).
 
-\## Overview
+Dungeon Manager is local first. The deterministic engine is authoritative for validated game actions and facts; AI components are clients, not state authorities; Foundry VTT is the intended presentation layer and is not implemented yet.
 
+## Implemented dependency direction
 
-This structure represents the planned architecture.
-Actual folders will be created as functionality is implemented.
+The principal implemented flow is:
 
+    caller
+      -> campaign/combat runtime composition
+      -> GameCommand
+      -> automation policy and optional human approval
+      -> GameEngine exact handler dispatch
+      -> GameResult with zero or more GameEvents
+      -> durable EventJournalStore
+      -> process-local GameEventJournal
+      -> WorldStateProjector
+      -> WorldStateHolder
 
+Command-audit records are appended to a separate process-local CommandAuditJournal around policy, gate, dispatch, publication, projection, and completion stages. The deterministic engine does not depend on AI providers, tools, managers, legacy JSON storage, Foundry, or a UI. Composition modules may inject those lower-level engine boundaries into a runtime.
 
-Dungeon Manager is designed as a modular AI-powered tabletop RPG assistant.
+## Implemented components
 
+### Local application foundation
 
+- config_loader.py reads local configuration.
+- logger.py configures the local application log.
+- models/ contains character, item, and campaign records.
+- storage/json_storage.py owns legacy JSON persistence.
+- managers/ owns model-specific create/load coordination.
+- tools/ contains character tools, immutable ToolSpec schemas, and the central ToolRegistry.
+- main.py composes the early local application path.
 
-The goal is to create a flexible system capable of supporting different tabletop games while keeping the AI, rules, campaign data, and virtual tabletop integration separated.
+These legacy components remain supported. They are not the authoritative event-sourced engine state.
 
+### Provider and AI tool boundary
 
+AIProvider defines the provider interface. OllamaProvider is the current local adapter, and AIManager constructs it from configuration.
 
-The initial development target is:
+The tool path is deliberately bounded:
 
+1. ToolAgent sends one deterministic prompt containing the sorted registry catalog.
+2. The Tool Call Parser classifies one complete response as ordinary text, one valid whole-response JSON call, one clean JSON fence, or a controlled malformed result. It does not search prose for embedded JSON.
+3. ToolRegistry resolves the exact registered tool and exposes immutable schema metadata.
+4. ToolExecutor validates callable arguments and invokes at most one tool once, with no retry or fallback.
+5. For a valid call, ToolAgent serializes one structured observation and makes at most one final provider request.
 
+The ToolAgent loop is implemented for the character-tool path, but it is not connected to the game engine, controlled combat, or narration. The live Ollama harness is opt-in, loopback-only, temporary-storage isolated, and excluded from deterministic verification.
 
-\- Dungeons \& Dragons 5e
+### Deterministic command authority
 
-\- Local AI operation
+GameCommand is an immutable intention with exact command type, command ID, actor ID, provenance, and deeply frozen JSON payload. Creating a command does not authorize it.
 
-\- Ollama backend
+AutomationPolicy evaluates exact per-capability rules. Optional HumanApprovalDecision records are human-only. resolve_automation_gate returns a fail-closed disposition without executing behavior. PolicyGatedCommandDispatcher invokes GameEngine only for a ready command and records process-local command-ID replay protection before dispatch.
 
-\- Foundry VTT integration
+GameEngine registers one synchronous handler per exact command type and invokes at most one handler once. Unknown commands, invalid input, handler exceptions, invalid results, and invalid event collections become controlled GameResult outcomes. A successful result may contain an ordered tuple of immutable GameEvent facts.
 
+### Audit, event, and projection boundary
 
+GameEvent records a durable world fact. CommandAuditRecord records lifecycle evidence. They are separate because a denied or failed command can be audited without claiming that the world changed.
 
-Future systems should be possible by replacing or extending modules rather than rebuilding the entire application.
+GameEventJournal and CommandAuditJournal are typed append-only process-local containers. Event batch preparation validates the complete ordered batch and assigns contiguous sequences before mutation. Batch append is all or nothing.
 
+WorldState is immutable derived state. WorldStateProjector resolves every exact event-type/schema reducer before applying the batch in order. WorldStateHolder replaces its state only after complete projection success and separately tracks synchronization health.
 
+AuditedCommandPipeline is the synchronous coordinator. It serializes submissions and prevents same-thread re-entry. It records proposal/policy/approval/gate/dispatch lifecycle stages, preserves the policy-gated result, publishes eligible events, projects the published entries, and records completion. It does not retry dispatch, publication, or projection.
 
-\---
+### Durable event authority and restart
 
+EventJournalStore owns the local SQLite event journal and its journal identity. SQLite details remain behind DurableJournalBinding.
 
+For a successful event-producing command, the publication order is:
 
-\# Project Structure
+1. The handler creates complete GameEvent objects inside GameResult.
+2. The pipeline validates and prepares one exact sequenced event batch against the current tail.
+3. EventJournalStore atomically commits that batch first and returns verified identity/tail metadata.
+4. The same prepared entry objects are appended atomically to the process-local GameEventJournal.
+5. WorldStateProjector applies exactly those entries; WorldStateHolder publishes the new complete state once.
+6. Completion audit records are appended independently.
 
+Durable history is therefore authoritative. A durable failure exposes no local event or projection. If durable commit is confirmed but local append or projection later fails, the durable fact is not rolled back; synchronization health fails closed and a fresh hydration or explicit projection recovery is required. A later audit failure also does not roll back an already committed event or state.
 
+hydrate_durable_runtime loads an existing journal, verifies its identity and complete ordered contents, constructs fresh in-memory journal and state-holder objects from an explicit sequence-zero base, and exposes a runtime only when durable, local, and projected tails agree. Hydration never dispatches, rerolls, appends, rewrites, repairs, or infers missing facts.
 
-```
+recover_world_state provides explicit catch-up and full-rebuild paths for process-local projection recovery. Recovery works from one immutable authoritative journal snapshot and commits a replacement state only if the journal tail remains unchanged.
 
-Dungeon Manager
+## First Playable Vertical Slice architecture
 
+### Campaign runtime and fixture
 
+campaign_runtime.py owns one explicit V1 fixture, not campaign discovery:
 
-├── dungeon\_manager/
+- campaign: vertical-slice-v1
+- journal: vertical-slice-v1-events
+- scene: controlled-goblin-encounter
+- selectable player character: nekria
+- hostile participant: goblin-1
 
-│   │
+initialize_controlled_fixture is the only operation allowed to create its caller-supplied JSON and SQLite targets. It refuses existing or partial targets. load_controlled_campaign_runtime validates the manifest and referenced legacy records, constructs an explicit sequence-zero state, hydrates durable history, registers reducers and handlers, and exposes CampaignRuntime only after all dependencies agree.
 
-│   ├── core/
+campaign.select_player_character is the first slice command. Selecting Nekria produces one campaign.player_character_selected event through the same durable-before-memory pipeline. Invalid selection is eventless; repeated valid selection is idempotent and eventless.
 
-│   │   ├── campaign.py
+### Dice
 
-│   │   ├── session.py
+engine/dice.py is provider-neutral and storage-free. DiceRollRequest identifies a bounded dice expression. Both modes use the same total calculation:
 
-│   │   └── game\_state.py
+- manual mode accepts explicit natural faces and records human_manual provenance;
+- automatic mode consumes exactly one face per die from an injected AutomaticFaceSource and records engine_automatic provenance.
 
-│   │
+SystemRandomFaceSource is the production adapter. SequenceFaceSource provides deterministic faces for tests and controlled callers. Missing manual input returns the next request; invalid input or source failure exposes no partial roll and performs no retry.
 
-│   ├── ai/
+### Controlled combat data
 
-│   │   ├── provider.py
+engine/combat_domain.py contains immutable fixture data only: Nekria and goblin-1 roles, initiative modifiers, armor class, hit points, and Nekria's nekria-rapier attack. combat_runtime.py validates this data against a hydrated runtime with Nekria selected before exposing ControlledCombatDomain and its explicitly unstarted seed.
 
-│   │   ├── ollama.py
+This is not a general D&D rules engine, combat manager, or content system.
 
-│   │   ├── prompts.py
+### Controlled player-attack round
 
-│   │   └── context.py
+engine/controlled_round.py is the pure adjudicator. controlled_round_runtime.py binds it to the existing command, policy, durable publication, and projection pipeline.
 
-│   │
+One combat.resolve_controlled_round command uses the fixed possible stage order:
 
-│   ├── data/
+1. Nekria initiative, 1d20+3.
+2. goblin-1 initiative, 1d20+2.
+3. Nekria rapier attack, 1d20+5.
+4. Rapier damage, 1d8+3, only on a hit.
 
-│   │   ├── characters.py
+Initiative sorts by descending total, descending modifier, then ascending stable participant ID. Nekria-first begins directly on Nekria. Goblin-first records controlled_slice_no_goblin_behavior and advances without a goblin action or die roll.
 
-│   │   ├── items.py
+Only a complete sequence creates one aggregate combat.controlled_round_resolved schema-1 event. The payload contains the rolls and provenance, initiative/order data, controlled no-action fact when applicable, attack and conditional damage, HP transition, defeat state, final round, encounter status, and active participant. The reducer validates that payload and projects it as one state transition.
 
-│   │   ├── npcs.py
+Input-required and failed stages return no event and do not change initiative, turns, HP, or completion state. On restart, hydration replays the aggregate event and reconstructs the same state without calling the dice source or handler.
 
-│   │   └── world.py
+## Atomicity and failure behavior
 
-│   │
+- Policy or approval rejection occurs before handler dispatch and event creation.
+- Replay protection is recorded before an authorized dispatch and is process-local.
+- Handlers return either a complete valid result or a controlled eventless failure.
+- Dice resolution never exposes partial faces.
+- Event preparation, SQLite append, in-memory batch append, and state replacement are individually all-or-nothing.
+- The pipeline orders durable commit before process-local publication and projection.
+- Projection consumes only authoritative published journal entries and commits state only after complete reducer success.
+- No layer retries or silently repairs a failed operation.
+- Durable/local divergence and projection failure are explicit health states; later dispatch fails closed until hydration or explicit recovery.
+- Sanitized caller results omit raw exception text, tracebacks, credentials, prompts, hidden payloads, and storage internals.
 
-│   ├── rules/
+## State ownership
 
-│   │   ├── engine.py
+- Local configuration: config/config.json.
+- Legacy entity and fixture records: JSONStorage at caller-supplied local paths.
+- Authoritative game-event history: EventJournalStore in caller-supplied local SQLite.
+- Current event journal mirror: process-local GameEventJournal.
+- Current derived state: process-local WorldStateHolder, reconstructed from the journal.
+- Command audit history: process-local CommandAuditJournal.
+- Command replay protection: process-local dispatcher state.
+- AI text and tool observations: transient unless an owning caller explicitly stores an accepted result.
+- Foundry state: no implemented ownership or synchronization path.
 
-│   │   └── dice.py
+## Future architecture
 
-│   │
+The exact next unstarted slice milestone is **Milestone 5 — Verified AI DM Narration Boundary**. It will require a separate request and must consume verified engine output without becoming game-state authority.
 
-│   ├── foundry/
-
-│   │   ├── connector.py
-
-│   │   └── sync.py
-
-│   │
-
-│   └── main.py
-
-│
-
-├── data/
-
-│   │
-
-│   ├── campaigns/
-
-│   ├── characters/
-
-│   ├── items/
-
-│   ├── npcs/
-
-│   ├── worlds/
-
-│   ├── adventures/
-
-│   ├── rules/
-
-│   └── memory/
-
-│
-
-├── foundry/
-
-│   └── integration files
-
-│
-
-├── ui/
-
-│   └── management interface
-
-│
-
-├── tools/
-
-│   └── import/export utilities
-
-│
-
-├── tests/
-
-│
-
-└── docs/
-
-```
-
-
-
-\---
-
-
-
-\# Core Components
-
-
-
-\## Core Engine
-
-
-
-Responsible for:
-
-
-
-\- Campaign state
-
-\- Session management
-
-\- Game flow
-
-\- Tracking changes
-
-
-
-The core should not depend directly on any AI model.
-
-
-
-\---
-
-
-
-\# AI Layer
-
-
-
-The AI layer handles communication with language models.
-
-
-
-Initial implementation:
-
-
-
-```
-
-Dungeon Manager
-
-&#x20;       |
-
-&#x20;       |
-
-&#x20;AI Provider Interface
-
-&#x20;       |
-
-&#x20;       |
-
-&#x20;Ollama
-
-&#x20;       |
-
-&#x20;       |
-
-&#x20;Qwen 2.5 32B
-
-```
-
-
-
-Future providers can be added:
-
-
-
-\- Other local models
-
-\- Cloud AI providers
-
-\- Alternative AI systems
-
-
-
-The rest of Dungeon Manager communicates through the provider interface instead of directly with a specific model.
-
-
-
-\---
-
-
-
-\# Data Layer
-
-
-
-Structured information is managed by Dungeon Manager.
-
-
-
-Examples:
-
-
-
-\## Characters
-
-
-
-\- Stats
-
-\- Classes
-
-\- Levels
-
-\- Inventory
-
-\- Background
-
-\- Relationships
-
-
-
-\## Items
-
-
-
-\- Name
-
-\- Description
-
-\- Properties
-
-\- Magical effects
-
-\- Ownership
-
-\- History
-
-
-
-\## NPCs
-
-
-
-\- Personality
-
-\- Goals
-
-\- Knowledge
-
-\- Relationships
-
-\- Current state
-
-
-
-\## World
-
-
-
-\- Locations
-
-\- Factions
-
-\- History
-
-\- Events
-
-
-
-The AI can use this information but should not be the only place where it exists.
-
-
-
-\---
-
-
-
-\# Rules System
-
-
-
-The rules system handles deterministic game mechanics.
-
-
-
-Examples:
-
-
-
-\- Dice rolls
-
-\- Character calculations
-
-\- Conditions
-
-\- Combat rules
-
-\- Spell effects
-
-
-
-The AI should interpret situations, but the rules engine should handle calculations.
-
-
-
-\---
-
-
-
-\# Foundry Integration
-
-
-
-Foundry VTT acts as the visual tabletop interface.
-
-
-
-Dungeon Manager remains the campaign intelligence layer.
-
-
-
-The integration should eventually allow:
-
-
-
-\- Token movement
-
-\- Scene changes
-
-\- Actor synchronization
-
-\- Item assignment
-
-\- Combat management
-
-\- Map preparation
-
-
-
-\---
-
-
-
-\# Management Interface
-
-
-
-A separate interface will exist for preparation and administration.
-
-
-
-This prevents confusing gameplay communication with management commands.
-
-
-
-Examples:
-
-
-
-\- Add homebrew content
-
-\- Import adventures
-
-\- Edit NPCs
-
-\- Manage rules
-
-\- Change AI settings
-
-\- Review campaign memory
-
-
-
-\---
-
-
-
-\# Design Principles
-
-
-
-\## Modularity
-
-
-
-Components should be replaceable without rebuilding the entire system.
-
-
-
-\## Separation of Responsibilities
-
-
-
-The AI creates and interprets.
-
-
-
-The application stores and calculates.
-
-
-
-\## Local First
-
-
-
-The system should work locally before adding external services.
-
-
-
-\## Expand Carefully
-
-
-
-New features should support tabletop gameplay rather than adding unnecessary complexity.
-
-
-
-## Current Runtime Flow
-
-The current system architecture:
-
-User
- |
- v
-Dungeon Manager
- |
- v
-AI Provider Layer
- |
- v
-Tool Layer
- |
- +-- Character Manager
- |
- +-- Item Manager
- |
- +-- Campaign Manager
- |
- v
-Models
- |
- v
-JSON Storage
-
-
-## AI Tool Philosophy
-
-The AI model does not directly modify files.
-
-All world changes must go through controlled managers.
-
-This prevents:
-- invalid data
-- accidental overwrites
-- inconsistent campaign state
-
-The AI acts as a decision layer, while Dungeon Manager controls execution.
-
-
-## Game Command and Dispatch Boundary
-
-`dungeon_manager.engine` is the provider-independent entry boundary for future
-game-engine actions. It uses only the Python standard library and has no direct
-dependency on AI providers, tools, managers, storage, rules, Foundry, or the
-current character-tool path.
-
-`GameCommand` is an immutable intention. It carries a generated or explicitly
-supplied stable command ID, an exact command type, a deeply immutable
-JSON-compatible object payload, immutable provenance, and an optional actor ID.
-It contains no business logic and cannot execute itself. Provenance records the
-initiator source (`human`, `ai`, `system`, or `external`) and may identify the
-specific initiator. The actor ID separately identifies who or what that
-initiator is acting as; it does not define a role or grant permission. Commands
-have no timestamp or correlation fields because the current architecture does
-not yet require them. `to_dict()` returns an independent JSON-compatible copy
-for future logging, transport, or persistence.
-
-`GameResult` is immutable and linked to the originating command ID. Its current
-statuses are:
-
-- `SUCCESS`: one handler returned a structurally valid result. This describes
-  handling, so output may still contain a normal domain-level negative outcome.
-- `UNKNOWN_COMMAND`: no exact handler registration exists.
-- `INVALID_COMMAND`: a command fails structural revalidation before handling.
-- `INVALID_HANDLER_RESULT`: a handler returns the wrong type, an invalid result,
-  or a result linked to a different command ID.
-- `HANDLER_FAILURE`: the selected handler raises an exception, or a handler
-  deliberately returns a safe controlled failure.
-
-Successful results cannot carry errors. Every non-success result requires
-non-empty safe caller-facing error text and cannot carry output. Nested output
-is immutable. Successful results also contain an ordered immutable tuple of
-zero or more `GameEvent` records, defaulting to empty. The tuple preserves the
-handler's exact event objects and order; it does not generate, repair, replace,
-reorder, deduplicate, publish, or persist them. Every event is structurally
-revalidated, must link to the result command ID through
-`originating_command_id`, and must have an event ID unique within that result.
-Event provenance and actor identity remain independent from command provenance
-and actor identity. Non-success results cannot contain events. `to_dict()`
-returns independent JSON-compatible output and event data.
-
-`GameEngine` registers one synchronous handler for each exact command type.
-Registration rejects invalid types, non-callable or incorrectly shaped
-handlers, and duplicates. Dispatch revalidates the command, looks up one exact
-type, and invokes at most one handler exactly once. It does not retry or fall
-through to another handler. Missing handlers and invalid handler results become
-controlled results. Structurally invalid event collections, non-event values,
-mismatched command linkage, duplicate event IDs, and corrupted events are
-controlled `INVALID_HANDLER_RESULT` outcomes with no events. Raised exceptions
-are logged with internal details and converted to safe caller-facing failures
-without tracebacks, raw exception text, or event payloads. Only test handlers
-exist in this milestone; current tools and managers do not dispatch through
-this engine yet.
-
-
-## Trust and Optional Automation Boundary
-
-The current pre-dispatch automation flow is:
-
-**GameCommand → AutomationPolicy → PolicyDecision → optional
-HumanApprovalDecision → GateDisposition**
-
-This remains a pure decision boundary. It does not call
-`GameEngine.dispatch()`, a handler, a tool, a manager, storage, an AI provider,
-a UI, or Foundry. A `READY` disposition means only that automation confirmation
-is satisfied; it does not mean permissions, game rules, command validation,
-dispatch, or execution have succeeded. The separate coordinator described
-below composes this pure boundary with the existing engine dispatcher.
-
-`AutomationPolicy` uses the trusted exact `GameCommand.command_type` as its
-case-sensitive capability key. Policy configuration consists of explicitly
-configured capabilities, optional per-capability default modes, exact
-per-capability/per-initiator modes, and policy-wide initiator rules that apply
-only to configured capabilities. Precedence is:
-
-1. exact capability and initiator rule;
-2. capability default;
-3. policy-wide initiator rule for an explicitly configured capability;
-4. denial.
-
-Unknown capabilities are denied before policy-wide initiator rules are
-considered. Configured capabilities without an applicable rule are also denied.
-Payload fields are never consulted for automation mode, capability, approval,
-authorization, roles, or permissions, so a command cannot grant itself
-authority. Configuration is deeply immutable and has defensive
-JSON-compatible serialization.
-
-The four automation modes are `DENY`, `SUGGEST`, `REQUIRE_CONFIRMATION`, and
-`AUTOMATIC`. `PolicyDecision` preserves the command ID, exact capability,
-initiator kind and optional identity, actor ID, selected mode, stable reason
-code, safe explanation, and whether human confirmation is required.
-
-`HumanApprovalDecision` is an immutable matching-command record with an
-explicit `APPROVED` or `DENIED` outcome, a non-empty human approver identity,
-and an optional reason. Only records marked with human provenance are valid;
-AI self-approval is rejected. The record does not mutate the command, dispatch
-anything, establish DM/player authority, or persist approval state.
-
-`resolve_automation_gate()` returns an immutable disposition: `READY`,
-`AWAITING_APPROVAL`, `SUGGEST_ONLY`, `DENIED`, or a fail-closed `INVALID`
-state. Mismatched, malformed, or unnecessary approvals never make a command
-ready. The resolver contains no executable behavior.
-
-Automation remains optional and authoritative per capability. Future global
-trust levels will be UI/configuration presets that generate capability rules,
-not authority that overrides them. A preset may therefore produce automatic
-initiative, confirmed dice rolls, suggested token movement, and denied
-automatic damage in the same configuration. Roles, DM/player permission
-authority, persistence, events, and gameplay rules remain future boundaries.
-
-
-## Policy-Gated Command Dispatch Boundary
-
-The controlled command flow is now:
-
-**GameCommand → AutomationPolicy → PolicyDecision → optional
-HumanApprovalDecision → GateDisposition → optional GameEngine.dispatch() →
-PolicyGatedDispatchResult**
-
-`PolicyGatedCommandDispatcher` is a small synchronous coordinator configured
-with one immutable `AutomationPolicy` and one `GameEngine`. Its public dispatch
-entry accepts only a `GameCommand` and optional `HumanApprovalDecision`.
-Callers cannot provide a policy decision, automation mode, capability, or gate
-disposition. The coordinator delegates policy precedence to
-`AutomationPolicy.evaluate()`, approval validation and gate resolution to
-`resolve_automation_gate()`, and exact handler selection and invocation to
-`GameEngine.dispatch()`; it never calls a handler directly.
-
-`PolicyGatedDispatchResult` is immutable and distinguishes `DISPATCHED`,
-`AWAITING_APPROVAL`, `SUGGESTION_ONLY`, `DENIED`, `INVALID`, `DUPLICATE`, and
-`COORDINATOR_FAILURE`. It preserves the command ID, every successfully produced
-policy decision, the gate disposition, a valid supplied approval for future
-audit provenance, the exact `GameResult` when dispatch returned normally, and
-a safe caller-facing explanation. Only `DISPATCHED` contains a `GameResult`,
-and it means dispatch was attempted rather than that handling succeeded.
-`UNKNOWN_COMMAND`, `INVALID_COMMAND`, `INVALID_HANDLER_RESULT`, and
-`HANDLER_FAILURE` therefore remain unchanged engine outcomes inside a dispatched
-aggregate. A normal domain-negative output remains a successful engine result.
-
-Each coordinator instance has process-local command-ID replay protection. A
-ready command ID is recorded atomically before `GameEngine.dispatch()` is
-called, which blocks repeated and re-entrant dispatch attempts. Awaiting,
-suggested, denied, and invalid submissions do not consume the ID; in particular,
-a human denial can later be replaced by an approval for the same command. A
-sorted immutable snapshot is available for diagnostics, with no API for
-removing IDs. This state is neither shared between coordinator instances nor
-durable across process restarts. Restart-safe idempotency requires future event
-or journal persistence.
-
-Unexpected policy, gate, or coordinator failures are logged internally and
-fail closed with safe aggregate results. An unexpected exception after the
-engine call begins consumes replay protection and is not retried. Normal
-controlled `GameResult` failures are not reinterpreted as coordinator failures,
-and policy evaluation, gate resolution, dispatch, and handlers are each
-attempted at most once per submission.
-
-
-## Game Event and Command Audit Foundation
-
-The engine boundary now distinguishes five related concepts:
-
-- A `GameCommand` is an intention.
-- A policy or approval decision determines whether that intention may proceed.
-- A `GameResult` describes command validation and handling.
-- A `GameEvent` records a fact that occurred in the game world.
-- A `CommandAuditRecord` explains one decision or execution stage.
-
-Denied, suggested, awaiting, duplicate, or merely proposed commands may produce
-audit records, but they do not invoke a handler and cannot produce game events
-claiming that a world change occurred. Invalid and failed engine results also
-cannot carry events. A successfully handled command may now return true world
-facts through `GameResult.events`; the result contract alone does not publish
-them. Neither record type executes behavior, changes world state, dispatches,
-or accesses handlers, managers, storage, AI, tools, rules, Foundry, or the live
-command pipeline.
-
-`GameEvent` is immutable data with a generated or explicit stable event ID, an
-exact case-sensitive event type, positive schema version, deeply immutable
-JSON-compatible payload, immutable `CommandProvenance`, optional actor and
-originating-command IDs, and an aware occurrence time normalized to canonical
-UTC. `CommandAuditRecord` similarly has a generated or explicit audit-record
-ID, command ID and exact command type, non-empty outcome, immutable initiator
-provenance, optional actor identity, optional deeply immutable JSON-object
-details, and a canonical UTC recording time. Their independent `to_dict()`
-representations serialize timestamps with a `Z` suffix and cannot mutate the
-records.
-
-`AuditStage` provides stable future lifecycle names for command proposal,
-policy evaluation, approval evaluation or recording, gate resolution, blocked
-dispatch, attempted dispatch, completed dispatch, and coordinator failure.
-Audit details are supplied explicitly as already-safe structured data; records
-do not automatically capture exception text, tracebacks, credentials, full AI
-prompts or responses, or hidden campaign information, and arbitrary non-JSON
-objects are rejected. Audit visibility, role authority, and permission policy
-are not implemented.
-
-`GameEventJournal` and `CommandAuditJournal` are separate typed append-only
-in-memory containers. Each assigns insertion-order sequence numbers starting at
-1, rejects duplicate IDs and the other journal's record type, and uses a small
-standard-library lock plus copy-on-write immutable state so a failed append
-does not alter entries or consume a sequence number. Immutable snapshots retain
-insertion order; exact filters cover event type, originating command ID,
-command ID, and typed audit stage; serialized lists are defensive copies.
-`GameEventJournal.append_batch()` additionally materializes and validates an
-entire ordered event collection before mutation, rejects invalid values and
-duplicate IDs within or already present outside the batch, and assigns one
-contiguous sequence range while holding the journal lock. The whole batch is
-appended or none of it is, empty batches are successful no-ops, concurrent
-batches cannot interleave, and the existing single-event `append()` behavior is
-preserved through the same atomic boundary. There is no update, delete,
-reorder, replacement, subscriber, queue, event bus, or persistence API.
-
-These journals are process-local foundations only. They are not durable,
-tamper-evident, or restart-replay storage. `CommandAuditJournal` now has the
-optional audited integration described below, and an explicitly injected
-`GameEventJournal` receives validated dispatched result events through that
-same pipeline. Neither journal performs world-state projection.
-
-## Durable Event Journal Persistence Foundation
-
-`EventJournalStore` is a separate, explicitly initialized SQLite storage
-boundary for immutable `GameEventJournalEntry` batches. It does not replace the
-JSON storage used for characters, campaigns, items, or other entity models, and
-it has no default project `data/` path. Each database has immutable logical
-metadata: a caller-supplied or generated journal ID, the exact storage-format
-identifier, and an integer schema version. Missing files are not empty
-journals, existing files cannot be reinitialized through the store, and
-unsupported formats or schema versions fail closed without migration.
-
-Every persisted row contains its assigned sequence, event ID, compact
-deterministic canonical `GameEvent` JSON, and a SHA-256 digest of the sequence
-plus canonical representation. The digest detects accidental corruption; it is
-not cryptographic authentication and does not defend against a malicious
-database writer. Loading validates all metadata and every row before exposing
-one immutable snapshot: sequence continuity from one, event-ID uniqueness, row
-identity, digest, and strict constructor-based event decoding. Any bad row
-returns a controlled corruption result with no partial history and no repair,
-rewrite, truncation, or migration.
-
-Append accepts already-sequenced immutable journal entries, an expected durable
-tail, and an optional expected journal identity. It fully materializes and
-validates the batch, takes one SQLite write transaction with WAL and full
-synchronous commits, validates the complete durable history inside that
-transaction, rejects a stale tail, journal mismatch, or duplicate event ID,
-then inserts the whole contiguous range or rolls it back. Empty batches are
-successful only at the matching tail. Connections and cursors are
-operation-scoped; SQLite and filesystem failures become safe typed results with
-no raw exceptions, SQL, paths, or event payloads.
-
-For an explicitly durable runtime, SQLite is the authoritative event history
-across process restarts. `GameEventJournal` is its synchronized process-local
-view and `WorldStateHolder` is a derived projection. `GameEventJournal` can
-prepare one exact immutable contiguous entry batch without mutation, atomically
-append those exact prepared objects at an unchanged expected tail, and construct
-a fresh journal from one fully validated immutable snapshot. It still exposes
-no active-journal replacement, update, delete, truncate, reorder, or repair API.
-
-`hydrate_durable_runtime()` is the explicit all-or-nothing startup boundary. It
-requires an existing `EventJournalStore`, an exact expected journal ID, an
-explicit immutable sequence-zero `WorldState`, and the existing projector. It
-does not initialize missing storage. It loads and validates the complete store
-snapshot, checks identity, constructs a fresh in-memory journal, projects the
-complete ordered history from the supplied base, verifies durable, local, and
-state tails, and only then exposes a typed runtime bundle containing the journal,
-holder, and validated durable binding. An initialized empty store returns the
-caller-supplied sequence-zero base without invoking reducers. Failure exposes no
-partial runtime, entries, or state and performs no append, rewrite, dispatch,
-policy, approval, replay, audit, handler, engine, AI, migration, or repair work.
-
-
-## Audited Command Pipeline, Event Publication, and Projection Integration
-
-The optional audited and event-publication flow is:
-
-**GameCommand → AuditedCommandPipeline → PolicyGatedCommandDispatcher →
-policy and approval gate → optional GameEngine.dispatch() → preserved
-PolicyGatedDispatchResult → exact immutable entry preparation → optional
-durable append → exact-entry in-memory publication → WorldState projection →
-controlled audit integration result**
-
-`AuditedCommandPipeline` accepts a `GameCommand` and optional
-`HumanApprovalDecision`, delegates the complete behavioral submission to the
-existing `PolicyGatedCommandDispatcher`, and appends typed records to one
-injected `CommandAuditJournal`. It also requires an explicitly injected
-`GameEventJournal` and publishes only the exact ordered non-empty event tuple
-from a preserved `DISPATCHED` result. Existing construction without a durable
-binding retains the explicit process-local `append_batch()` behavior. Durable
-construction requires a validated `DurableJournalBinding`; it never silently
-falls back to in-memory-only publication. The pipeline depends on the binding's
-small typed append capability and contains no SQLite, SQL, filesystem, or
-database-path behavior. It does
-not evaluate policy, resolve approvals, manage replay state, select a handler,
-call a handler, reinterpret a `GameResult`, or repeat dispatch after a
-publication or projection failure. The pipeline now also requires one explicit
-`WorldStateProjector` and `WorldStateHolder`. It projects only the immutable
-sequenced entries returned by the successful batch publication, starting from
-the holder's latest committed snapshot; it does not reconstruct journal entries
-from events or duplicate reducer selection and validation. The dispatcher's
-existing public API and unaudited behavior remain unchanged. A private
-synchronous lifecycle-recorder protocol exposes only the actual policy, gate,
-blocked, pre-engine, post-engine, and coordinator-failure boundaries needed by
-the optional integration.
-
-Applicable records are appended in logical order: command proposed, policy
-evaluated, approval evaluated when supplied or required, gate resolved,
-dispatch blocked or dispatch attempted, then dispatch completed or coordinator
-failure. Duplicate ready submissions produce a blocked record and never cross
-the engine boundary again. Awaiting, suggestion, denial, invalid, duplicate,
-coordinator-failure, and other non-dispatched results never publish. A
-dispatched result without events performs no event-journal mutation. No audit
-path creates or modifies a `GameEvent`.
-
-Audit details are deliberately minimal. They may contain policy mode and stable
-reason code, approval outcome and approver identity, gate disposition and
-reason code, policy-gated dispatch status, and final `GameResult.status`.
-When event publication fails, one existing coordinator-failure audit stage may
-be attempted with only the stable publication phase, typed disposition, and
-event count. Projection failure records use that same stage with only the
-projection phase and disposition, controlled reason and projector status,
-previous and target sequences, and event count.
-Command payloads, approval reasons, handler output, result error text, raw
-exceptions and tracebacks, prompts, responses, credentials, and hidden campaign
-content, including event payloads, are not copied automatically. Command
-provenance and optional actor identity are linked without assigning roles or
-authority.
-
-`AuditedCommandPipelineResult` is immutable. It preserves the authoritative
-`PolicyGatedDispatchResult` when one exists, returns an immutable tuple of the
-journal entries appended for that submission, and serializes defensively. Its
-typed event-publication disposition is `NOT_APPLICABLE`, `NO_EVENTS`,
-`PUBLISHED`, or `FAILED`; successful publication includes immutable appended
-event-entry snapshots, while failure includes only safe publication error text.
-The existing audit integration status still distinguishes completed auditing,
-pre-dispatch audit failure, post-dispatch failure, and a controlled integration
-failure. `FAILED` uses the existing post-dispatch classification to distinguish
-publication failure from pre-dispatch behavior without replacing the preserved
-dispatch and `GameResult`. Any valid produced events remain the exact ordered
-tuple on that result. Event payloads are not copied into audit details or
-publication errors. Record IDs and UTC times come from injectable synchronous
-factories; production defaults use UUIDs and the existing UTC clock boundary.
-
-The result additionally carries a typed projection disposition:
-`NOT_APPLICABLE`, `UNCHANGED`, `PROJECTED`, `FAILED`, or `UNAVAILABLE`.
-Projection metadata is limited to the previous, target, and resulting committed
-sequences, a controlled reason code, the typed projector status, and safe error
-text. Complete world-state data is available only through the holder's immutable
-`snapshot` API and is never copied into audit details or projection errors.
-
-Durable submissions also carry immutable `DurablePublicationResult` and
-`DurableJournalHealth` metadata. Publication statuses distinguish unconfigured
-or inapplicable operation, eventless success, no confirmed commit, complete
-durable/local/state synchronization, confirmed commit followed by local or
-projection failure, stale or divergent authority, and unavailable or uncertain
-storage. Metadata is limited to journal identity, expected and resulting tails,
-appended count, commitment confirmation, and controlled reasons. Durable result
-serialization omits event payloads, handler output, world-state data, reducer
-output, SQL, database paths, raw exceptions, prompts, credentials, and approval
-reasons.
-
-`WorldStateHolder` owns one explicit initial immutable `WorldState`, exposes its
-snapshot and payload-free synchronization health, and has no public mutation,
-patch, delete, rollback, recovery, or rebuild API. Pipeline construction compares
-the state's last sequence with the event-journal tail. A mismatch marks the
-holder out of sync and makes submissions unavailable; each later coordinated
-submission rechecks the tail before dispatch. A successful complete incremental
-projection or explicit coordinated recovery is the only operation that replaces
-the committed state. A failed command projection leaves the prior snapshot
-unchanged, marks this process-local holder out of sync, and requires deliberate
-recovery before later dispatch can resume.
-
-The audit-failure boundary is the engine call. Every required pre-dispatch
-append, including `DISPATCH_ATTEMPTED`, must succeed before replay is consumed
-and before `GameEngine.dispatch()` is called. A failure therefore closes the
-gate without handler invocation. Once the engine boundary is crossed, a later
-audit failure preserves the original dispatch result and consumed replay state.
-For a durable event batch, the pipeline prepares the exact immutable entries at
-the current local tail without mutation, calls the durable append exactly once,
-and verifies the successful journal ID, previous tail, resulting tail, and
-appended count. Only then does it atomically append those same entry objects to
-the in-memory journal. It never regenerates IDs, timestamps, payloads, or
-sequences. Eventless success performs no durable write. Successful local
-publication is immediately followed by projection of exactly its entries while
-the pipeline's one outer coordination lock remains held. A non-reentrant
-thread-local guard rejects same-thread recursive dispatch or recovery before
-policy evaluation, replay
-consumption, or reducer re-entry; other concurrent dispatch and recovery callers
-wait and then use the state committed by the preceding call. This keeps journal
-and projection order identical and prevents lost state updates.
-
-Failure before durable commit leaves durable history, in-memory history, and
-world state unchanged. Store rejection or failure is never retried and never
-repeats the handler. Stale external advancement, journal mismatch, unavailable
-storage, and uncertain store results mark durable health unavailable and block
-later dispatch until a fresh startup hydration succeeds; in-memory projection
-recovery cannot clear that condition. Once the store confirms success, the
-events are authoritative and are never rolled back, deleted, or rewritten. If
-the exact local append then fails, the durable commit remains, no partial local
-batch or state is exposed, durable health becomes unavailable, and restart
-hydration is the repair boundary. A crash at that point has the same recovery
-path.
-
-Projection failure after durable and local publication leaves both journal
-views at the committed tail, preserves the prior world state, marks only
-projection health out of sync, and allows the existing explicit projection
-recovery path; that recovery performs no durable append. Successful publication
-and projection survive a later audit failure.
-The audit journal, event journal, and committed world state are deliberately not
-transactionally coupled: once dispatch occurs, successful event/state or audit
-updates are never rolled back. No failure path reinvokes the engine, dispatcher,
-handler, publication operation, or reducer.
-
-Command audit records, replay protection, and projected world state remain
-process-local and non-durable. Durable event history does not provide durable
-command idempotency, audit persistence, world-state snapshots, automatic
-rehydration, migrations, repair, cross-process command locks, queues,
-subscribers, polling, retries, compaction, rollback, encryption, or authenticated
-signatures.
-
-
-## World State Projection Foundation
-
-The standalone derived-state flow is:
-
-**ordered `GameEventJournalEntry` snapshot → exact registered reducers →
-immutable `WorldState`**
-
-`WorldState` contains a deeply immutable JSON-object view and the last
-successfully applied journal sequence. Initial state is empty at sequence zero,
-and defensive serialization returns independent JSON-compatible data. This
-state is derived data only: it is not an authority, event log, permission
-source, persistent save, snapshot, or rollback boundary, and it has no
-game-specific fields.
-
-`WorldStateProjector` registers one synchronous reducer for each exact
-case-sensitive `(event_type, schema_version)` pair. Reducers have exactly two
-required positional-or-keyword parameters: the current immutable state data and
-one immutable `GameEvent`. Registration rejects malformed metadata, duplicate
-pairs, asynchronous or uninspectable callables, positional-only parameters,
-defaults, keyword-only parameters, and variadic parameters. The immutable
-registration snapshot is sorted by event type and schema version. There are no
-wildcards, fallbacks, case normalization, or implicit migrations.
-
-Full replay starts at sequence zero; incremental projection requires the first
-supplied entry to immediately follow the starting state's last sequence. The
-projector first materializes and validates the entire ordered snapshot,
-including entry types, exact contiguous sequences, event structure, and unique
-batch event IDs. It then resolves every exact reducer before invoking any one
-of them. Unknown event types and unsupported versions fail closed rather than
-producing incomplete authoritative-looking state.
-
-Each reducer is invoked once in journal order with no retry, skip, or alternate
-selection. A reducer returns the complete next JSON-object view; its mapping is
-defensively copied and deeply frozen before another reducer can observe it.
-Only a fully successful batch produces a new state. Invalid output or a raised
-exception discards the candidate, exposes no partial state, and returns a typed
-payload-free failure with only safe event identity and schema diagnostics.
-Statuses distinguish success, invalid state or journal input, unknown event
-type, unsupported schema version, invalid reducer result, and reducer failure.
-
-Reducer purity is a contract: reducers must not mutate journals, dispatch,
-access managers or storage, call AI, or perform other side effects. The
-framework supplies immutable inputs and isolates returned state, but Python
-cannot prove that a callable has no external effects. The projector itself
-remains pure and stateless; the audited integration described above coordinates
-its explicit invocation after publication. The explicit recovery coordinator
-described below remains outside the projector. Persistence, subscribers,
-transactions, real gameplay reducers, rules, tools, UI, and Foundry integration
-remain outside this foundation.
-
-
-## World State Projection Recovery and Rebuild
-
-The explicit process-local recovery flow is:
-
-**typed recovery strategy → existing `AuditedCommandPipeline` coordination
-boundary → one immutable authoritative `GameEventJournal` snapshot → existing
-`WorldStateProjector` → unchanged-tail verification → atomic holder commit**
-
-`AuditedCommandPipeline.recover_world_state()` is a synchronous trusted internal
-or operator API. It does not establish roles or permission authority. It uses the
-same non-reentrant lock and thread-local active guard as ordinary pipeline
-dispatch, so recovery and dispatch cannot run concurrently, two recoveries
-cannot update state concurrently, and same-thread recovery from an active
-handler or reducer returns controlled `UNAVAILABLE` metadata without waiting on
-the held lock.
-
-`CATCH_UP` starts from the holder's exact committed `WorldState`, rejects state
-ahead of the captured journal tail, and supplies only entries after the state's
-`last_sequence` to `WorldStateProjector.project()`. When synchronized state is
-already at the tail, it returns `NO_ACTION` without invoking a reducer. A fully
-successful catch-up atomically replaces state and clears out-of-sync health only
-when the recovered sequence equals the captured tail.
-
-`FULL_REBUILD` requires an explicitly supplied immutable `WorldState` whose
-sequence is zero. It never invents an empty or other default base. The complete
-captured journal is projected from sequence one; an empty journal may therefore
-commit the supplied sequence-zero base. Because journal events are authoritative
-and state is derived, successful rebuild may replace synchronized-but-stale or
-out-of-sync derived data. The supplied base and previous committed state remain
-immutable throughout candidate construction.
-
-Recovery captures exactly one immutable journal-entry snapshot while holding the
-outer coordination boundary. Reducers resolve and run once in journal order
-under the existing projector rules, without retry, skip, fallback, migration, or
-partial exposure. Before commit, the coordinator compares the live append-only
-journal tail with the captured tail. A change returns `JOURNAL_CHANGED`, leaves
-the previous state unchanged, and keeps or marks health out of sync as required.
-Only a complete typed projection reaching the captured tail enters the holder's
-single atomic state-and-health replacement boundary.
-
-`WorldStateRecoveryResult` is immutable and distinguishes `RECOVERED`,
-`NO_ACTION`, `INVALID_REQUEST`, `PROJECTION_FAILURE`, `JOURNAL_CHANGED`,
-`UNAVAILABLE`, and `COORDINATOR_FAILURE`. It exposes only the typed strategy,
-previous and captured-tail sequences, a successful resulting sequence,
-controlled projector status/reason, and safe error text. It never contains state
-data, event payloads, reducer or handler output, prompts, credentials, hidden
-campaign content, raw exceptions, or tracebacks; serialization returns an
-independent JSON-compatible dictionary.
-
-Recovery does not call `GameEngine`, handlers, automation policy, approval
-resolution, replay protection, event publication, or either journal's append
-operation. It consumes no command ID, creates no game event or command audit
-record, and is never entered automatically from ordinary dispatch. Failed
-recovery does not commit partial state or invalidate a synchronized state merely
-because an optional rebuild failed. In a durable pipeline, recovery is allowed
-only while durable and in-memory journal health remains synchronized; it cannot
-clear stale, divergent, or uncertain durable health. Journal repair or rewriting,
-migrations, rollback, durable world-state snapshots, subscribers, queues,
-background workers, authorization, and real gameplay reducers remain outside
-this milestone.
-
-
-## Tool Call Parsing Boundary
-
-The Tool Call Parser is a standalone part of the AI layer. It inspects one
-complete AI response and classifies it as a valid tool request, an ordinary
-response with no tool request, or a malformed tool request.
-
-A structurally valid request contains a non-empty `tool` string and an
-`arguments` object. Omitted arguments default to an empty object. The parser may
-accept one clean JSON Markdown fence only when the fence contains the entire
-response; it does not scan surrounding prose for embedded JSON.
-
-Parsing does not look up the tool registry, execute a tool, or modify game state.
-`ToolAgent` consumes the parser's typed classification without duplicating its
-validation rules.
-
-
-## Tool Execution Boundary
-
-The Tool Executor is a standalone, synchronous part of the AI layer. It accepts
-an already validated `ToolCall`, resolves the named callable through the central
-`ToolRegistry`, validates its arguments against that callable's signature, and
-delegates one execution attempt back to the registry.
-
-Execution returns a typed result that distinguishes success, an unknown tool,
-invalid arguments, and a controlled tool failure. A normal tool return is
-preserved unchanged as successful execution, including domain-level payloads
-whose own `success` field is false. Raised exceptions are logged internally and
-converted to safe error text without exposing tracebacks to callers.
-
-The executor does not parse AI text, call an AI provider, retry tools, choose a
-fallback tool, or access storage directly. State changes still flow through
-registered tools and their managers.
-
-
-## Tool Specification and Initial Prompt Boundary
-
-`ToolSpec` is an immutable, provider-neutral description of one registered tool.
-It contains a unique non-empty name, a model-facing description, and a JSON
-Schema-compatible object input schema with described properties, an explicit
-required list, and `additionalProperties: false`. Character-tool metadata stays
-beside `CharacterTools`, not in `ToolAgent` or a provider implementation.
-
-`ToolRegistry` pairs each specification with its callable. Registration rejects
-duplicate names, malformed metadata, specification/registry name mismatches,
-uninspectable or variadic callables, advertised arguments that the callable does
-not accept, unadvertised callable parameters, and disagreement between the
-schema's required list and callable defaults. Existing `get_tools()` and
-execution behavior remain available. `get_tool_specs()` returns an immutable
-tuple in tool-name order; specifications use read-only nested mappings and
-produce independent JSON-compatible dictionaries for catalogs.
-
-Signature introspection reliably validates keyword parameter names and whether
-defaults make them optional. It deliberately does not infer or enforce JSON
-types from Python annotations because the executor performs signature binding,
-not runtime type validation. JSON property types remain explicit provider-neutral
-metadata for future adapters.
-
-The initial `ToolAgent` prompt serializes the sorted registry catalog as compact
-canonical JSON. It clearly delimits both catalog and user request, includes a
-tool-call example generated from specification examples, and requires exactly
-one bare JSON object for a single tool call. The prompt forbids prose, Markdown
-fences, unknown tools, missing required arguments, and invented arguments. When
-no tool is needed, it instructs the model to return ordinary text.
-
-
-## ToolAgent Single-Tool Observation/Response Boundary
-
-`ToolAgent` constructs the initial prompt from the user request and
-provider-neutral specifications exposed by one central `ToolRegistry`, then
-makes one request through the provider abstraction. The complete raw initial
-response is passed once to the Tool Call Parser.
-
-Ordinary responses and malformed tool requests preserve their existing
-single-provider behavior without execution. A valid `ToolCall` is passed to the
-Tool Executor exactly once. Every executor outcome remains unchanged, including
-unknown tools, invalid arguments, controlled failures, successful results, and
-normal domain-level payloads whose own `success` field is false.
-
-After execution, `ToolAgent` serializes one versioned observation as canonical
-JSON. The observation contains the original user request, tool name and
-arguments, execution status, output, and the executor's safe error. It is placed
-between explicit data delimiters in a follow-up prompt that tells the provider to
-answer the original request, not invoke another tool, and not treat tool output
-as instructions. The provider receives that observation exactly once. Its final
-response is preserved as text and is not parsed or executed.
-
-`ToolAgentResult` distinguishes these outcomes:
-
-- `ASSISTANT_RESPONSE` preserves an ordinary raw response and does not invoke the
-  executor.
-- `MALFORMED_TOOL_REQUEST` preserves the raw response and parser error and does
-  not invoke the executor.
-- `TOOL_EXECUTION` preserves the raw initial response, parsed `ToolCall`,
-  unchanged `ToolExecutionResult`, and final provider response.
-- `OBSERVATION_FAILURE` preserves the completed execution when its output cannot
-  be safely serialized and does not run the tool or provider again.
-- `FINAL_RESPONSE_FAILURE` preserves the completed execution when the follow-up
-  provider request fails and reports that the tool was not run again.
-
-An initial provider exception still propagates because no action has occurred.
-A post-execution provider exception becomes a controlled typed result so callers
-can distinguish it from an unexecuted request. One `ask()` makes at most two
-provider requests, one initial parse, one executor call, and one underlying tool
-invocation. It does not retry, correct, select alternatives, parse the final
-response, recurse, or access managers or storage directly.
-
-
-## Opt-In Local Ollama Validation Boundary
-
-`dungeon_manager.ai.live_tool_loop_validation` is a standalone validation
-harness, not a pytest entry point. It exits before loading configuration unless
-`DUNGEON_MANAGER_RUN_LIVE_OLLAMA=1` is set deliberately.
-The older `dungeon_manager.ai.test_tool_agent` module delegates to this same
-guarded entry point and no longer constructs default project storage.
-
-The harness verifies that the configured provider is Ollama, the endpoint is
-loopback-local, and the exact configured model tag is already present in
-Ollama's local tag catalog. It does not install Ollama, pull models, change the
-model, or contact a non-loopback host. `AIManager` then constructs the real
-`OllamaProvider` used by `ToolAgent`.
-
-One injected `TemporaryDirectory` supplies `JSONStorage` through the real
-`CharacterManager`, `CharacterTools`, and `ToolRegistry`. Project logger setup is
-not called. Thin counting wrappers record provider, executor, registry, and
-underlying-tool invocations while delegating every operation unchanged; they do
-not retry, repair, parse around, or directly invoke a tool in place of the
-model.
-
-Each live run attempts the four fixed validation scenarios once and emits one
-structured JSON report containing raw initial responses, typed classifications,
-requested arguments, execution observations, final responses, per-scenario call
-counts, temporary-storage snapshots, and failure reasons. The report is printed
-to the caller and is not persisted by the harness. Temporary character data is
-removed when the run ends, including on scenario failure.
-
+Milestone 6, Durable Complete-Round Restart Proof, and Milestone 7, End-to-End First Playable Validation, are also unstarted. General rules, goblin tactics, Foundry integration, UI, voice, durable audit, restart-safe replay protection, snapshots, migration/repair, background work, and cross-process coordination remain future work.

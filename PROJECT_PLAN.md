@@ -1,250 +1,35 @@
-\# Dungeon Manager Project Plan
+# Dungeon Manager Project Plan
 
+## Planning authority
 
+The accepted product sequence is defined by [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md). This plan reports progress against that sequence; it does not redefine product behavior.
 
-\## Current Milestone - Durable Event Journal Pipeline Integration and Startup Hydration
+## First Playable Vertical Slice
 
+1. **Campaign Runtime and Controlled Fixture Foundation — completed and verified.**
+   One explicit local campaign fixture can be initialized, validated, loaded, selected, durably journaled, projected, and hydrated without campaign discovery or general content tooling.
 
+2. **Deterministic Dice Foundation — completed and verified.**
+   Manual natural faces and injected automatic faces resolve through one provider-neutral primitive with immutable results, provenance, bounded input, and no partial result on failure.
 
-Status: Implemented and deterministically validated.
+3. **Minimal Combat Domain — completed and verified.**
+   The static Nekria-versus-goblin fixture defines combatants, initiative modifiers, armor class, hit points, and Nekria's rapier without introducing a general rules system.
 
+4. **Player Attack Resolution — completed and verified.**
+   One controlled command resolves the frozen initiative-to-post-attack sequence, publishes one aggregate durable event, projects it atomically, and reconstructs it on restart without rerolling or inference.
 
+5. **Verified AI DM Narration Boundary — next, unstarted.**
 
-Scope:
+6. **Durable Complete-Round Restart Proof — unstarted.**
 
+7. **End-to-End First Playable Validation — unstarted.**
 
+## Current boundary
 
-\- Add exact immutable sequenced-batch preparation and exact atomic local append
-without regenerating event identity, timestamps, payloads, or sequences
+The exact next milestone is **Milestone 5 — Verified AI DM Narration Boundary**. It has not started. This documentation checkpoint does not add narration, connect AI output to combat, or begin Milestones 6–7.
 
-\- Integrate a validated typed durable binding into the audited pipeline so one
-SQLite append succeeds and is verified before the same entries become visible
-in the process-local journal and projection
+General D&D rules, goblin tactics, movement, spellcasting, Foundry control, UI, voice, campaign discovery, editors, migrations, repair, background work, and cross-process coordination remain outside the completed slice scope unless explicitly scheduled.
 
-\- Fail closed on stale external writers, journal mismatch, unavailable or
-uncertain storage, and confirmed durable commit followed by local synchronization
-failure; require fresh explicit startup hydration for durable divergence
+## Later roadmap
 
-\- Preserve the existing explicit projection-recovery path only for projection
-failure after durable and local publication, with no durable append during
-recovery
-
-\- Add explicit all-or-nothing startup hydration from an existing store and
-caller-supplied sequence-zero base into fresh journal and world-state views
-
-\- Return immutable typed hydration, durable-publication, and durable-health
-metadata with defensive payload-free durable serialization
-
-
-Only test reducers and synthetic events exist. Current tools, managers, AI
-routing, rules, entity JSON storage, UI, Foundry behavior, and unaudited command
-dispatch remain unchanged. SQLite event history is durable; command audit,
-replay protection, and world-state projection remain process-local.
-
-Next milestone: **First Playable Vertical Slice GDD Specification**. It has not
-started.
-
-
-
-\## Phase 1 - Foundation
-
-
-
-Goal:
-
-Create the basic application structure.
-
-
-
-Tasks:
-
-
-
-\- Python project setup
-
-\- Virtual environment
-
-\- Configuration system
-
-\- Basic logging
-
-\- Initial testing framework
-
-
-
-\---
-
-
-
-\## Phase 2 - AI Core
-
-
-
-Goal:
-
-Create communication between Dungeon Manager and local AI models.
-
-
-
-Tasks:
-
-
-
-\- AI provider interface
-
-\- Ollama integration
-
-\- Prompt management
-
-\- Context handling
-
-
-
-Initial model:
-
-
-
-\- Qwen 2.5 32B
-
-
-
-\---
-
-
-
-\## Phase 3 - Data Management
-
-
-
-Goal:
-
-Create structured management of tabletop information.
-
-
-
-Tasks:
-
-
-
-\- Character system
-
-\- NPC system
-
-\- Item system
-
-\- World data
-
-\- Campaign memory
-
-
-
-\---
-
-
-
-\## Phase 4 - Rules System
-
-
-
-Goal:
-
-Separate game mechanics from AI creativity.
-
-
-
-Tasks:
-
-
-
-\- Dice system
-
-\- Rules handling
-
-\- Conditions
-
-\- Combat calculations
-
-
-
-\---
-
-
-
-\## Phase 5 - Foundry Integration
-
-
-
-Goal:
-
-Connect Dungeon Manager with Foundry VTT.
-
-
-
-Tasks:
-
-
-
-\- Actor synchronization
-
-\- Token control
-
-\- Scene management
-
-\- Item handling
-
-
-
-\---
-
-
-
-\## Phase 6 - Management Interface
-
-
-
-Goal:
-
-Create tools for preparation and administration.
-
-
-
-Tasks:
-
-
-
-\- Content management
-
-\- Homebrew management
-
-\- Campaign tools
-
-\- AI configuration
-
-
-
-\---
-
-
-
-\## Phase 7 - Advanced Features
-
-
-
-Goal:
-
-Add optional advanced functionality.
-
-
-
-Tasks:
-
-
-
-\- Voice input
-
-\- Voice output
-
-\- NPC voices
-
-\- Advanced map automation
-
+After the frozen slice is validated end to end, later planning may address broader rules coverage, richer campaign/world systems, Foundry VTT presentation and control, management interfaces, additional local providers, voice interaction, and advanced automation. Those items are future directions, not current implementation commitments.

@@ -36,6 +36,32 @@ def test_engine_package_has_only_standard_library_and_internal_dependencies():
                 )
 
 
+def test_campaign_runtime_is_a_provider_and_sql_free_composition_boundary():
+    path = Path(__file__).resolve().parent.parent / "campaign_runtime.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+    absolute_from_modules = {
+        node.module or ""
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level == 0
+    }
+    source = path.read_text(encoding="utf-8")
+
+    assert "sqlite3" not in imported_modules
+    assert not any(
+        module.startswith("dungeon_manager." + forbidden)
+        for module in absolute_from_modules
+        for forbidden in ("ai", "foundry", "rules", "tools")
+    )
+    assert "SELECT " not in source
+    assert "INSERT INTO " not in source
+
+
 def test_automation_policy_has_no_dispatcher_or_external_engine_dependency():
     path = Path(__file__).resolve().parent / "automation.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -47,6 +73,66 @@ def test_automation_policy_has_no_dispatcher_or_external_engine_dependency():
     }
 
     assert relative_imports == {"_json", "command"}
+
+
+def test_dice_foundation_has_only_immutable_json_and_standard_library_dependencies():
+    path = Path(__file__).resolve().parent / "dice.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    relative_imports = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level > 0
+    }
+    absolute_imports = {
+        alias.name.split(".", 1)[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+
+    assert relative_imports == {"_json"}
+    assert absolute_imports <= sys.stdlib_module_names
+
+
+def test_combat_domain_has_only_dice_and_immutable_json_engine_dependencies():
+    path = Path(__file__).resolve().parent / "combat_domain.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    relative_imports = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level > 0
+    }
+    absolute_imports = {
+        alias.name.split(".", 1)[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+
+    assert relative_imports == {"_json", "dice"}
+    assert absolute_imports <= sys.stdlib_module_names
+
+
+def test_controlled_round_adjudication_has_only_engine_data_dependencies():
+    path = Path(__file__).resolve().parent / "controlled_round.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    relative_imports = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level > 0
+    }
+    absolute_imports = {
+        alias.name.split(".", 1)[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+
+    assert relative_imports == {"_json", "combat_domain", "dice", "game_event"}
+    assert absolute_imports <= sys.stdlib_module_names
 
 
 def test_policy_gated_dispatcher_uses_only_existing_engine_boundaries():
