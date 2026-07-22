@@ -5,10 +5,11 @@ implemented in seven deliberately bounded milestones.
 
 Implementation status: Milestone 1, Campaign Runtime and Controlled Fixture
 Foundation; Milestone 2, Deterministic Dice Foundation; Milestone 3, Minimal
-Combat Domain; Milestone 4, Player Attack Resolution; and Milestone 5, Verified
-AI DM Narration Boundary are implemented and verified. The dice primitive
-remains independently reusable, while Milestone 4 composes it into the one
-controlled durable sequence described below.
+Combat Domain; Milestone 4, Player Attack Resolution; Milestone 5, Verified AI
+DM Narration Boundary; and Milestone 6, Durable Complete-Round Restart Proof
+are implemented and verified. The dice primitive remains independently
+reusable, while Milestone 4 composes it into the one controlled durable sequence
+described below.
 
 The completed loop is: load an existing campaign, hydrate durable history,
 select Nekria, enter one controlled hostile-goblin scene, establish initiative,
@@ -78,6 +79,24 @@ presentation text: it is not a game event, projected state, or evidence that an
 action occurred. Provider failure leaves the already committed combat result
 unchanged. Restart hydration does not automatically replay narration.
 
+### Milestone 6 durable-restart clarification
+
+The completed controlled round is restart-proven by discarding every original
+process-local runtime object and constructing two independent fresh runtimes
+from only the existing fixture files and SQLite event journal. Each hydration
+reconstructs the exact durable event IDs, sequences, order, payloads, selected
+character, projected combat result, and synchronized tails. It does not roll
+dice, dispatch a command, resolve combat, append or republish an event, invoke
+a provider, ToolAgent, parser, registry, executor, or tool, replay narration,
+repair state, or infer missing facts.
+
+The durable comparison establishes its baseline after the store has completed
+its SQLite operation, then compares fixture files plus the SQLite database and
+WAL when present. The SQLite `-shm` sidecar is process-local coordination
+state and is not treated as durable campaign content. Command-audit history,
+replay guards, narration/provider history, and Python object identity remain
+process-local and are deliberately not claimed to survive restart.
+
 Implementation sequence:
 
 1. Campaign Runtime and Controlled Fixture Foundation — implemented and verified.
@@ -85,8 +104,8 @@ Implementation sequence:
 3. Minimal Combat Domain — implemented after verification.
 4. Player Attack Resolution — implemented after verification.
 5. Verified AI DM Narration Boundary — implemented after verification.
-6. Durable Complete-Round Restart Proof — next, unstarted.
-7. End-to-End First Playable Validation.
+6. Durable Complete-Round Restart Proof — implemented after verification.
+7. End-to-End First Playable Validation — next, unstarted.
 
 Excluded until explicitly scheduled: general D&D rules, initiative beyond the
 controlled encounter, random generation, damage/HP/conditions, goblin tactics,

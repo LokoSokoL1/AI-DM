@@ -21,13 +21,14 @@ The accepted product sequence is defined by [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V
 5. **Verified AI DM Narration Boundary — completed and verified.**
    One immutable packet is derived from the exact durably committed and synchronized controlled-round event. A dedicated tool-free provider may return transient presentation text once; it cannot dispatch commands, mutate state, append events, or become evidence of game facts.
 
-6. **Durable Complete-Round Restart Proof — next, unstarted.**
+6. **Durable Complete-Round Restart Proof — completed and verified.**
+   One completed controlled round is hydrated twice through genuinely fresh runtime composition from existing fixture files and the SQLite journal only. Durable facts and projected state agree exactly; dice, dispatch, append, narration, tools, retries, and repair do not occur during hydration.
 
-7. **End-to-End First Playable Validation — unstarted.**
+7. **End-to-End First Playable Validation — next, unstarted.**
 
 ## Current boundary
 
-The exact next milestone is **Milestone 6 — Durable Complete-Round Restart Proof**. It has not started. Milestone 5 does not persist narration, replay it on restart, connect ToolAgent or tools to combat, or begin Milestones 6–7.
+The exact next milestone is **Milestone 7 — End-to-End First Playable Validation**. It has not started. Milestone 6 does not persist narration, replay it on restart, make audit or replay safeguards durable, or begin Milestone 7.
 
 General D&D rules, goblin tactics, movement, spellcasting, Foundry control, UI, voice, campaign discovery, editors, migrations, repair, background work, and cross-process coordination remain outside the completed slice scope unless explicitly scheduled.
 

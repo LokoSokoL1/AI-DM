@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document describes the architecture implemented on develop through First Playable Vertical Slice Milestone 5. Future work is labelled explicitly. The frozen product behavior is in [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md).
+This document describes the architecture implemented on develop through First Playable Vertical Slice Milestone 6. Future work is labelled explicitly. The frozen product behavior is in [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md).
 
 Dungeon Manager is local first. The deterministic engine is authoritative for validated game actions and facts; AI components are clients, not state authorities; Foundry VTT is the intended presentation layer and is not implemented yet.
 
@@ -87,6 +87,8 @@ For a successful event-producing command, the publication order is:
 Durable history is therefore authoritative. A durable failure exposes no local event or projection. If durable commit is confirmed but local append or projection later fails, the durable fact is not rolled back; synchronization health fails closed and a fresh hydration or explicit projection recovery is required. A later audit failure also does not roll back an already committed event or state.
 
 hydrate_durable_runtime loads an existing journal, verifies its identity and complete ordered contents, constructs fresh in-memory journal and state-holder objects from an explicit sequence-zero base, and exposes a runtime only when durable, local, and projected tails agree. Hydration never dispatches, rerolls, appends, rewrites, repairs, or infers missing facts.
+
+Milestone 6 proves the complete controlled round across a genuine process boundary. The proof releases the original campaign/combat runtime, journal mirror, projection, dispatcher, handlers, binding, provider, narration boundary, and result objects; it then composes two separate runtimes from newly constructed JSONStorage and EventJournalStore objects at the same fixture and SQLite paths. Only serialized durable event facts and derived projection facts are compared. The fresh runs neither call dice, dispatch, resolution, append, provider, ToolAgent, parser, registry, executor, nor tool boundaries. Fixture files, SQLite main database, and WAL when present are byte-hashed after the original store operation has completed; the SQLite `-shm` coordination sidecar is deliberately excluded from durable-content claims.
 
 recover_world_state provides explicit catch-up and full-rebuild paths for process-local projection recovery. Recovery works from one immutable authoritative journal snapshot and commits a replacement state only if the journal tail remains unchanged.
 
@@ -173,11 +175,11 @@ The implemented one-way flow is:
 - Authoritative game-event history: EventJournalStore in caller-supplied local SQLite.
 - Current event journal mirror: process-local GameEventJournal.
 - Current derived state: process-local WorldStateHolder, reconstructed from the journal.
-- Command audit history: process-local CommandAuditJournal.
-- Command replay protection: process-local dispatcher state.
+- Command audit history: process-local CommandAuditJournal; it is not restart reconstructed.
+- Command replay protection: process-local dispatcher state; it is not restart persistent.
 - Verified narration and tool observations: transient presentation data, never authoritative game state unless a future separately accepted owner is introduced.
 - Foundry state: no implemented ownership or synchronization path.
 
 ## Future architecture
 
-The exact next unstarted slice milestone is **Milestone 6 — Durable Complete-Round Restart Proof**. Milestone 7, End-to-End First Playable Validation, is also unstarted. General narration, narration persistence or replay, semantic fact-checking of arbitrary prose, general rules, goblin tactics, Foundry integration, UI, voice, durable audit, restart-safe replay protection, snapshots, migration/repair, background work, and cross-process coordination remain future work.
+The exact next unstarted slice milestone is **Milestone 7 — End-to-End First Playable Validation**. General narration, narration persistence or replay, semantic fact-checking of arbitrary prose, general rules, goblin tactics, Foundry integration, UI, voice, durable audit, restart-safe replay protection, snapshots, migration/repair, background work, and cross-process coordination remain future work.
