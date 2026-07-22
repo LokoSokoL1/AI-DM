@@ -6,9 +6,9 @@ The player chooses; the AI interprets and performs the Dungeon Master role; the 
 
 ## Current stage
 
-The project is implementing the accepted seven-milestone First Playable Vertical Slice. Milestones 1–4 are complete and deterministically verified: the controlled campaign fixture, manual and automatic dice foundation, minimal Nekria-versus-goblin combat domain, and one durable player-attack round.
+The project is implementing the accepted seven-milestone First Playable Vertical Slice. Milestones 1–5 are complete and deterministically verified: the controlled campaign fixture, manual and automatic dice foundation, minimal Nekria-versus-goblin combat domain, one durable player-attack round, and a verified AI DM narration boundary.
 
-The exact next unstarted milestone is **Milestone 5 — Verified AI DM Narration Boundary**. No Milestone 5 implementation is included in this checkpoint.
+The narration boundary derives one immutable, event-bound packet only after durable publication and synchronized projection. A dedicated tool-free provider may turn that packet into transient presentation text, but narration cannot alter authoritative state. The exact next unstarted milestone is **Milestone 6 — Durable Complete-Round Restart Proof**.
 
 ## Documentation
 

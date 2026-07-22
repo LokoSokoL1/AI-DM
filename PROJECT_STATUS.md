@@ -3,11 +3,11 @@
 ## Checkpoint
 
 - Branch: develop
-- Checkpoint scope: the accumulated First Playable Vertical Slice implementation through Milestone 4, plus reconciled canonical documentation
-- Completed slice milestone: **Milestone 4 — Player Attack Resolution**
-- Exact next unstarted milestone: **Milestone 5 — Verified AI DM Narration Boundary**
+- Checkpoint scope: the accumulated First Playable Vertical Slice implementation through Milestone 5, plus reconciled canonical documentation
+- Completed slice milestone: **Milestone 5 — Verified AI DM Narration Boundary**
+- Exact next unstarted milestone: **Milestone 6 — Durable Complete-Round Restart Proof**
 
-No Milestone 5 implementation, AI combat narration, UI, or Foundry integration is part of this checkpoint.
+No Milestone 6 implementation, UI, voice, or Foundry integration is part of this checkpoint.
 
 ## Implemented behavior
 
@@ -27,7 +27,7 @@ No Milestone 5 implementation, AI combat narration, UI, or Foundry integration i
 - Audited command coordination, atomic event batches, append-only in-memory event and audit journals, world-state projection, synchronization health, and explicit recovery/rebuild.
 - Identity-checked SQLite EventJournalStore with durable-before-memory publication and all-or-nothing startup hydration into fresh in-memory journal and projection objects.
 
-### First Playable Vertical Slice Milestones 1–4
+### First Playable Vertical Slice Milestones 1–5
 
 - Explicit V1 fixture identities for campaign vertical-slice-v1, journal vertical-slice-v1-events, scene controlled-goblin-encounter, Nekria, and goblin-1.
 - All-or-nothing fixture loading; Nekria is the only selectable player character. Selection creates one durable event and is restart safe.
@@ -39,15 +39,20 @@ No Milestone 5 implementation, AI combat narration, UI, or Foundry integration i
 - A successful complete sequence creates one aggregate combat.controlled_round_resolved event. Durable append, local publication, and projection expose no partial round.
 - Manual input requirements and every controlled failure are eventless and preserve prior initiative, turn, hit-point, and completion state.
 - Restart hydration validates and reconstructs the exact recorded round without rerolling, requesting input, inferring facts, or appending another event.
+- Verified narration packets are constructed only from one exact controlled-round journal entry and its synchronized projection. They retain source event identity and sequence plus the minimum recorded combat facts needed for narration.
+- A dedicated narration-only provider receives only the immutable packet. ToolAgent, tool schemas, parsers, registries, executors, commands, runtime objects, and storage handles are excluded from that interface.
+- Provider output is transient presentation text. One eligible event is attempted at most once per narration boundary with no retry or fallback; provider failure leaves the durable event, local journal, projection, dice history, and combat result unchanged.
 
 ## Verified milestone coverage
 
-Milestones 1–4 of the accepted seven-milestone slice are implemented and verified. The tests cover exact fixture identity and validation, selection durability, manual and automatic dice, immutable combat data, both initiative orders, tie-breaking, staged input requests, hit/miss/lethal outcomes, aggregate event publication, projection, failure atomicity, idempotency, and restart reconstruction.
+Milestones 1–5 of the accepted seven-milestone slice are implemented and verified. The tests cover exact fixture identity and validation, selection durability, manual and automatic dice, immutable combat data, both initiative orders, tie-breaking, staged input requests, hit/miss/lethal outcomes, aggregate event publication, projection, failure atomicity, idempotency, restart reconstruction, narration eligibility, exact source binding, provider isolation, and narration failure containment.
 
 ## Verification
 
-- Complete deterministic pytest suite: **588 passed**, with dungeon_manager/ai/test_live_tool_loop_validation.py explicitly excluded.
-- Focused Milestones 1–4 slice suite: **81 passed**.
+- Complete engine suite: **532 passed**.
+- Complete deterministic pytest suite: **604 passed**, with dungeon_manager/ai/test_live_tool_loop_validation.py explicitly excluded.
+- Focused Milestones 1–5 slice and dependency suite: **97 passed**.
+- Directly affected narration, controlled-round, journal, projection, hydration, pipeline, and dependency suite: **192 passed**.
 - Five isolated legacy smoke modules: **passed** for models, storage, managers, tools, and registry.
 - Normal data/ and logs/ manifest: **unchanged** by path, type, size, UTC modification timestamp, and SHA-256.
 - Live validator, Ollama, and all external AI providers: **not invoked**.
@@ -56,7 +61,8 @@ The two deterministic guard tests stored in dungeon_manager/ai/test_live_tool_lo
 
 ## Known limitations
 
-- Milestone 5 narration is unstarted; ToolAgent and provider components are not connected to the controlled combat result.
+- Narration is implemented only for the single verified controlled-round event. It does not provide semantic proof of unrestricted provider prose, general event narration, persistence, streaming, retry, fallback, or automatic replay after restart.
+- ToolAgent and tools are not part of the narration path and remain disconnected from controlled combat.
 - Milestones 6–7 are unstarted.
 - The slice is one fixed campaign, one selectable player character, one hostile goblin, one permitted rapier attack, and one aggregate controlled-round event.
 - Goblin tactical behavior is deliberately absent; the goblin-first path records only the accepted no-action advancement.
@@ -67,4 +73,4 @@ The two deterministic guard tests stored in dungeon_manager/ai/test_live_tool_lo
 
 ## Next milestone
 
-**Milestone 5 — Verified AI DM Narration Boundary** is the exact next unstarted GDD milestone. Do not begin it without a separate implementation request.
+**Milestone 6 — Durable Complete-Round Restart Proof** is the exact next unstarted GDD milestone. Do not begin it without a separate implementation request.

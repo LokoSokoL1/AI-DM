@@ -5,9 +5,10 @@ implemented in seven deliberately bounded milestones.
 
 Implementation status: Milestone 1, Campaign Runtime and Controlled Fixture
 Foundation; Milestone 2, Deterministic Dice Foundation; Milestone 3, Minimal
-Combat Domain; and Milestone 4, Player Attack Resolution are implemented and
-verified. The dice primitive remains independently reusable, while Milestone 4
-composes it into the one controlled durable sequence described below.
+Combat Domain; Milestone 4, Player Attack Resolution; and Milestone 5, Verified
+AI DM Narration Boundary are implemented and verified. The dice primitive
+remains independently reusable, while Milestone 4 composes it into the one
+controlled durable sequence described below.
 
 The completed loop is: load an existing campaign, hydrate durable history,
 select Nekria, enter one controlled hostile-goblin scene, establish initiative,
@@ -58,14 +59,33 @@ they publish no partial event and expose no partial initiative, turn, HP, or
 completion state. Hydration reconstructs the full recorded sequence from the
 event without rerolling, requesting input, inference, or appending events.
 
+### Milestone 5 verified-narration clarification
+
+Narration is eligible only after the aggregate controlled-round event has been
+durably committed, published to the process-local journal, projected, and
+verified synchronized with that exact event. An immutable narration packet is
+bound to the source event ID and durable sequence and contains only the recorded
+initiative, controlled advancement, attack, damage, hit-point, defeat, and
+final-turn facts required for narration. Missing, malformed, mismatched, failed,
+or incomplete sources produce no provider call and no inferred replacement
+facts.
+
+A dedicated narration-only provider receives that packet without tools,
+commands, storage, runtime objects, or mutation authority. One eligible result
+is attempted at most once by its narration boundary, without retry, fallback,
+combat replay, or another event append. Returned narration is transient
+presentation text: it is not a game event, projected state, or evidence that an
+action occurred. Provider failure leaves the already committed combat result
+unchanged. Restart hydration does not automatically replay narration.
+
 Implementation sequence:
 
 1. Campaign Runtime and Controlled Fixture Foundation — implemented and verified.
 2. Deterministic Dice Foundation — implemented after verification.
 3. Minimal Combat Domain — implemented after verification.
 4. Player Attack Resolution — implemented after verification.
-5. Verified AI DM Narration Boundary — next, unstarted.
-6. Durable Complete-Round Restart Proof.
+5. Verified AI DM Narration Boundary — implemented after verification.
+6. Durable Complete-Round Restart Proof — next, unstarted.
 7. End-to-End First Playable Validation.
 
 Excluded until explicitly scheduled: general D&D rules, initiative beyond the

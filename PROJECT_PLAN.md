@@ -18,15 +18,16 @@ The accepted product sequence is defined by [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V
 4. **Player Attack Resolution — completed and verified.**
    One controlled command resolves the frozen initiative-to-post-attack sequence, publishes one aggregate durable event, projects it atomically, and reconstructs it on restart without rerolling or inference.
 
-5. **Verified AI DM Narration Boundary — next, unstarted.**
+5. **Verified AI DM Narration Boundary — completed and verified.**
+   One immutable packet is derived from the exact durably committed and synchronized controlled-round event. A dedicated tool-free provider may return transient presentation text once; it cannot dispatch commands, mutate state, append events, or become evidence of game facts.
 
-6. **Durable Complete-Round Restart Proof — unstarted.**
+6. **Durable Complete-Round Restart Proof — next, unstarted.**
 
 7. **End-to-End First Playable Validation — unstarted.**
 
 ## Current boundary
 
-The exact next milestone is **Milestone 5 — Verified AI DM Narration Boundary**. It has not started. This documentation checkpoint does not add narration, connect AI output to combat, or begin Milestones 6–7.
+The exact next milestone is **Milestone 6 — Durable Complete-Round Restart Proof**. It has not started. Milestone 5 does not persist narration, replay it on restart, connect ToolAgent or tools to combat, or begin Milestones 6–7.
 
 General D&D rules, goblin tactics, movement, spellcasting, Foundry control, UI, voice, campaign discovery, editors, migrations, repair, background work, and cross-process coordination remain outside the completed slice scope unless explicitly scheduled.
 

@@ -115,6 +115,13 @@ from .world_state_recovery import (
     WorldStateRecoveryStatus,
     WorldStateRecoveryStrategy,
 )
+from .verified_narration import (
+    NarrationPacketBuildResult,
+    NarrationPacketBuildStatus,
+    NarrationRollFact,
+    VerifiedNarrationPacket,
+    build_verified_narration_packet,
+)
 
 __all__ = [
     "ApprovalOutcome",
@@ -176,6 +183,9 @@ __all__ = [
     "InitialCombatSeed",
     "InitiativeEntry",
     "NO_GOBLIN_BEHAVIOR_REASON",
+    "NarrationPacketBuildResult",
+    "NarrationPacketBuildStatus",
+    "NarrationRollFact",
     "PolicyDecision",
     "PolicyGatedCommandDispatcher",
     "PolicyGatedDispatchResult",
@@ -199,6 +209,8 @@ __all__ = [
     "WorldStateRecoveryStrategy",
     "WorldStateReducer",
     "WorldStateSynchronizationStatus",
+    "VerifiedNarrationPacket",
+    "build_verified_narration_packet",
     "hydrate_durable_runtime",
     "controlled_combat_definition",
     "initial_combat_seed",

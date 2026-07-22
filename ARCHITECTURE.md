@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document describes the architecture implemented on develop through First Playable Vertical Slice Milestone 4. Future work is labelled explicitly. The frozen product behavior is in [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md).
+This document describes the architecture implemented on develop through First Playable Vertical Slice Milestone 5. Future work is labelled explicitly. The frozen product behavior is in [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md).
 
 Dungeon Manager is local first. The deterministic engine is authoritative for validated game actions and facts; AI components are clients, not state authorities; Foundry VTT is the intended presentation layer and is not implemented yet.
 
@@ -50,6 +50,8 @@ The tool path is deliberately bounded:
 5. For a valid call, ToolAgent serializes one structured observation and makes at most one final provider request.
 
 The ToolAgent loop is implemented for the character-tool path, but it is not connected to the game engine, controlled combat, or narration. The live Ollama harness is opt-in, loopback-only, temporary-storage isolated, and excluded from deterministic verification.
+
+Verified combat narration uses a separate NarrationProvider interface. It accepts exactly one immutable VerifiedNarrationPacket and returns a typed result associated with the same source event ID and sequence. The interface supplies no ToolAgent, tool schema, parser, registry, executor, command, runtime, storage, or state-mutation capability.
 
 ### Deterministic command authority
 
@@ -136,6 +138,19 @@ Only a complete sequence creates one aggregate combat.controlled_round_resolved 
 
 Input-required and failed stages return no event and do not change initiative, turns, HP, or completion state. On restart, hydration replays the aggregate event and reconstructs the same state without calling the dice source or handler.
 
+### Verified AI DM narration boundary
+
+engine/verified_narration.py owns immutable narration facts and verifies that one `combat.controlled_round_resolved` journal entry exactly matches the current synchronized `controlled_combat` projection. The packet is bound to the source event ID and journal sequence and contains only stable encounter references, recorded roll faces/modifiers/totals/provenance, initiative order, controlled no-action fact, attack and conditional damage, HP transition, defeat, and final turn state.
+
+verified_narration.py admits only a successful AuditedCommandPipeline result whose single event is durably committed, locally published, projected, and currently synchronized at the exact same tail. It additionally requires exact object identity with the runtime's in-memory journal entry before constructing the packet. ai/narration_provider.py is the dedicated provider-facing interface. One boundary instance attempts one eligible source event at most once, with no retry or fallback. Its text result is transient and is never published, projected, hydrated, parsed as a tool request, or treated as game state.
+
+The implemented one-way flow is:
+
+    durable verified controlled-round event + synchronized projection
+      -> immutable VerifiedNarrationPacket
+      -> narration-only provider
+      -> transient presentation text
+
 ## Atomicity and failure behavior
 
 - Policy or approval rejection occurs before handler dispatch and event creation.
@@ -147,6 +162,8 @@ Input-required and failed stages return no event and do not change initiative, t
 - Projection consumes only authoritative published journal entries and commits state only after complete reducer success.
 - No layer retries or silently repairs a failed operation.
 - Durable/local divergence and projection failure are explicit health states; later dispatch fails closed until hydration or explicit recovery.
+- Narration eligibility fails closed before provider invocation for incomplete publication, projection failure, unhealthy tails, malformed events, or event/projection disagreement.
+- Narration-provider failure cannot roll back or modify the already authoritative combat event and projection, and it is not retried automatically.
 - Sanitized caller results omit raw exception text, tracebacks, credentials, prompts, hidden payloads, and storage internals.
 
 ## State ownership
@@ -158,11 +175,9 @@ Input-required and failed stages return no event and do not change initiative, t
 - Current derived state: process-local WorldStateHolder, reconstructed from the journal.
 - Command audit history: process-local CommandAuditJournal.
 - Command replay protection: process-local dispatcher state.
-- AI text and tool observations: transient unless an owning caller explicitly stores an accepted result.
+- Verified narration and tool observations: transient presentation data, never authoritative game state unless a future separately accepted owner is introduced.
 - Foundry state: no implemented ownership or synchronization path.
 
 ## Future architecture
 
-The exact next unstarted slice milestone is **Milestone 5 — Verified AI DM Narration Boundary**. It will require a separate request and must consume verified engine output without becoming game-state authority.
-
-Milestone 6, Durable Complete-Round Restart Proof, and Milestone 7, End-to-End First Playable Validation, are also unstarted. General rules, goblin tactics, Foundry integration, UI, voice, durable audit, restart-safe replay protection, snapshots, migration/repair, background work, and cross-process coordination remain future work.
+The exact next unstarted slice milestone is **Milestone 6 — Durable Complete-Round Restart Proof**. Milestone 7, End-to-End First Playable Validation, is also unstarted. General narration, narration persistence or replay, semantic fact-checking of arbitrary prose, general rules, goblin tactics, Foundry integration, UI, voice, durable audit, restart-safe replay protection, snapshots, migration/repair, background work, and cross-process coordination remain future work.

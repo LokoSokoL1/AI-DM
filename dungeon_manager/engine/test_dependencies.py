@@ -135,6 +135,63 @@ def test_controlled_round_adjudication_has_only_engine_data_dependencies():
     assert absolute_imports <= sys.stdlib_module_names
 
 
+def test_verified_narration_packet_has_only_authoritative_engine_data_dependencies():
+    path = Path(__file__).resolve().parent / "verified_narration.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    relative_imports = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level > 0
+    }
+    absolute_imports = {
+        alias.name.split(".", 1)[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+
+    assert relative_imports == {
+        "_json",
+        "controlled_round",
+        "dice",
+        "journals",
+        "world_state",
+    }
+    assert absolute_imports <= sys.stdlib_module_names
+
+
+def test_narration_provider_and_boundary_have_no_tools_or_concrete_ai_dependency():
+    package_root = Path(__file__).resolve().parent.parent
+    paths = (
+        package_root / "ai" / "narration_provider.py",
+        package_root / "verified_narration.py",
+    )
+    forbidden_modules = {
+        "dungeon_manager.ai.ollama_provider",
+        "dungeon_manager.ai.provider",
+        "dungeon_manager.ai.tool_agent",
+        "dungeon_manager.ai.tool_call_parser",
+        "dungeon_manager.ai.tool_executor",
+        "dungeon_manager.tools",
+    }
+
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        imports = {
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        } | {
+            node.module or ""
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.level == 0
+        }
+        assert not (imports & forbidden_modules)
+        assert "sqlite3" not in imports
+
+
 def test_policy_gated_dispatcher_uses_only_existing_engine_boundaries():
     path = Path(__file__).resolve().parent / "policy_gated_dispatcher.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
