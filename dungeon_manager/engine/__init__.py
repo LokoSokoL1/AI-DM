@@ -25,6 +25,15 @@ from .automation import (
 )
 
 from .command import CommandProvenance, CommandSource, GameCommand
+from .durable_journal import (
+    DurableEventJournalAppender,
+    DurableJournalBinding,
+    DurableJournalHealth,
+    DurableJournalHealthReason,
+    DurableJournalHealthStatus,
+    DurablePublicationResult,
+    DurablePublicationStatus,
+)
 from .game_engine import CommandHandler, GameEngine
 from .game_event import GameEvent
 from .event_journal_store import (
@@ -46,6 +55,12 @@ from .policy_gated_dispatcher import (
     PolicyGatedDispatchStatus,
 )
 from .result import GameResult, GameResultStatus
+from .startup_hydration import (
+    HydratedDurableRuntime,
+    StartupHydrationResult,
+    StartupHydrationStatus,
+    hydrate_durable_runtime,
+)
 from .world_state import (
     ReducerRegistration,
     WorldState,
@@ -81,6 +96,13 @@ __all__ = [
     "CommandAuditRecord",
     "CommandProvenance",
     "CommandSource",
+    "DurableEventJournalAppender",
+    "DurableJournalBinding",
+    "DurableJournalHealth",
+    "DurableJournalHealthReason",
+    "DurableJournalHealthStatus",
+    "DurablePublicationResult",
+    "DurablePublicationStatus",
     "EventPublicationDisposition",
     "EVENT_JOURNAL_STORAGE_FORMAT",
     "EVENT_JOURNAL_STORAGE_SCHEMA_VERSION",
@@ -98,6 +120,7 @@ __all__ = [
     "GateDispositionStatus",
     "GateReasonCode",
     "HumanApprovalDecision",
+    "HydratedDurableRuntime",
     "PolicyDecision",
     "PolicyGatedCommandDispatcher",
     "PolicyGatedDispatchResult",
@@ -106,6 +129,8 @@ __all__ = [
     "ProjectionDisposition",
     "ProjectionReasonCode",
     "ReducerRegistration",
+    "StartupHydrationResult",
+    "StartupHydrationStatus",
     "WorldState",
     "WorldStateHealth",
     "WorldStateHolder",
@@ -117,5 +142,6 @@ __all__ = [
     "WorldStateRecoveryStrategy",
     "WorldStateReducer",
     "WorldStateSynchronizationStatus",
+    "hydrate_durable_runtime",
     "resolve_automation_gate",
 ]

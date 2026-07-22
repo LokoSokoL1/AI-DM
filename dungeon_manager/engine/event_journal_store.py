@@ -9,12 +9,11 @@ import json
 import sqlite3
 import uuid
 from collections.abc import Iterable, Mapping, Set as AbstractSet
-from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
 from ._json import validate_trimmed_identifier
+from .durable_journal import EventJournalStoreResult, EventJournalStoreStatus
 from .game_event import GameEvent
 from .journals import GameEventJournalEntry
 
@@ -22,81 +21,6 @@ from .journals import GameEventJournalEntry
 EVENT_JOURNAL_STORAGE_FORMAT = "dungeon_manager.game_event_journal.sqlite"
 EVENT_JOURNAL_STORAGE_SCHEMA_VERSION = 1
 _METADATA_KEYS = frozenset({"format", "journal_id", "schema_version"})
-
-
-class EventJournalStoreStatus(str, Enum):
-    """Safe outcomes for durable event-journal operations."""
-
-    SUCCESS = "success"
-    NOT_FOUND = "not_found"
-    ALREADY_EXISTS = "already_exists"
-    INVALID_INPUT = "invalid_input"
-    STALE_TAIL = "stale_tail"
-    CORRUPT = "corrupt"
-    UNSUPPORTED_VERSION = "unsupported_version"
-    STORAGE_FAILURE = "storage_failure"
-
-
-@dataclass(frozen=True)
-class EventJournalStoreResult:
-    """Immutable controlled result with entries only for successful loads."""
-
-    status: EventJournalStoreStatus
-    journal_id: Optional[str] = None
-    previous_tail: Optional[int] = None
-    tail_sequence: Optional[int] = None
-    appended_count: int = 0
-    reason_code: Optional[str] = None
-    error: Optional[str] = None
-    entries: Optional[tuple[GameEventJournalEntry, ...]] = None
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.status, EventJournalStoreStatus):
-            raise ValueError("Event-journal store status must be valid.")
-        if self.journal_id is not None:
-            validate_trimmed_identifier(self.journal_id, "Journal ID")
-        for value, label in (
-            (self.previous_tail, "Previous tail"),
-            (self.tail_sequence, "Tail sequence"),
-            (self.appended_count, "Appended count"),
-        ):
-            if value is not None and (
-                not isinstance(value, int) or isinstance(value, bool) or value < 0
-            ):
-                raise ValueError(f"{label} must be a non-negative integer.")
-        if self.reason_code is not None:
-            validate_trimmed_identifier(self.reason_code, "Reason code")
-        if self.error is not None:
-            validate_trimmed_identifier(self.error, "Store error")
-        if self.status is EventJournalStoreStatus.SUCCESS:
-            if self.error is not None or self.reason_code is not None:
-                raise ValueError("Successful store results cannot carry errors.")
-        elif self.entries is not None:
-            raise ValueError("Only successful loads may expose journal entries.")
-        if self.entries is not None:
-            if not isinstance(self.entries, tuple):
-                raise ValueError("Loaded journal entries must be an immutable tuple.")
-            for entry in self.entries:
-                if not isinstance(entry, GameEventJournalEntry):
-                    raise ValueError("Loaded journal entries must be valid entries.")
-
-    def to_dict(self) -> dict[str, Any]:
-        """Return an independent JSON-compatible transport representation."""
-
-        return {
-            "appended_count": self.appended_count,
-            "entries": (
-                None
-                if self.entries is None
-                else [entry.to_dict() for entry in self.entries]
-            ),
-            "error": self.error,
-            "journal_id": self.journal_id,
-            "previous_tail": self.previous_tail,
-            "reason_code": self.reason_code,
-            "status": self.status.value,
-            "tail_sequence": self.tail_sequence,
-        }
 
 
 def _canonical_event_json(event: GameEvent) -> str:
@@ -217,9 +141,22 @@ class EventJournalStore:
         entries: Iterable[GameEventJournalEntry],
         *,
         expected_tail_sequence: int,
+        expected_journal_id: Optional[str] = None,
     ) -> EventJournalStoreResult:
         """Atomically append an already-sequenced immutable entry batch."""
 
+        if expected_journal_id is not None:
+            try:
+                validate_trimmed_identifier(
+                    expected_journal_id,
+                    "Expected journal ID",
+                )
+            except ValueError:
+                return _safe_failure(
+                    EventJournalStoreStatus.INVALID_INPUT,
+                    "invalid_expected_journal_id",
+                    "The expected journal ID is invalid.",
+                )
         batch_result = self._materialize_batch(entries, expected_tail_sequence)
         if isinstance(batch_result, EventJournalStoreResult):
             return batch_result
@@ -240,6 +177,17 @@ class EventJournalStore:
                 connection.rollback()
                 return metadata
             journal_id = metadata
+            if (
+                expected_journal_id is not None
+                and journal_id != expected_journal_id
+            ):
+                connection.rollback()
+                return _safe_failure(
+                    EventJournalStoreStatus.JOURNAL_ID_MISMATCH,
+                    "journal_id_mismatch",
+                    "The durable journal identity does not match the expected journal.",
+                    journal_id=journal_id,
+                )
             existing_entries = self._read_entries(connection, journal_id)
             if isinstance(existing_entries, EventJournalStoreResult):
                 return existing_entries

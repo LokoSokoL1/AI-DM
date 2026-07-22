@@ -412,3 +412,62 @@ def test_journals_offer_no_update_delete_or_reorder_pathway():
         assert not hasattr(journal, "remove")
         assert not hasattr(journal, "reorder")
         assert not hasattr(journal, "replace")
+
+
+def test_event_journal_prepares_exact_entries_without_mutation():
+    journal = GameEventJournal()
+    events = (event(1), event(2))
+
+    prepared = journal.prepare_batch(events, expected_tail_sequence=0)
+
+    assert journal.entries == ()
+    assert tuple(entry.sequence for entry in prepared) == (1, 2)
+    assert tuple(entry.event for entry in prepared) == events
+
+
+def test_event_journal_appends_exact_prepared_entries_atomically():
+    journal = GameEventJournal()
+    prepared = journal.prepare_batch((event(1), event(2)), expected_tail_sequence=0)
+
+    appended = journal.append_prepared_batch(
+        prepared,
+        expected_tail_sequence=0,
+    )
+
+    assert appended is prepared
+    assert journal.entries is prepared
+    assert all(actual is expected for actual, expected in zip(appended, prepared))
+
+
+def test_prepared_append_rejects_changed_tail_without_partial_batch():
+    journal = GameEventJournal()
+    prepared = journal.prepare_batch((event(1), event(2)), expected_tail_sequence=0)
+    journal.append(event(3, event_id="event-competing"))
+    before = journal.entries
+
+    with pytest.raises(ValueError, match="tail changed"):
+        journal.append_prepared_batch(prepared, expected_tail_sequence=0)
+
+    assert journal.entries is before
+
+
+def test_fresh_event_journal_reconstruction_preserves_exact_snapshot():
+    source = GameEventJournal()
+    snapshot = source.append_batch((event(1), event(2)))
+
+    reconstructed = GameEventJournal.from_snapshot(snapshot)
+
+    assert reconstructed is not source
+    assert reconstructed.entries is snapshot
+    assert reconstructed.tail_sequence == 2
+    assert all(
+        actual is expected
+        for actual, expected in zip(reconstructed.entries, snapshot)
+    )
+
+
+def test_event_journal_reconstruction_rejects_incomplete_snapshot():
+    invalid = (GameEventJournalEntry(2, event(2)),)
+
+    with pytest.raises(ValueError, match="contiguous"):
+        GameEventJournal.from_snapshot(invalid)

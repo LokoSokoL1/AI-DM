@@ -168,6 +168,157 @@ class GameEventJournal:
             self.__event_ids = updated_ids
             return entries
 
+    def prepare_batch(
+        self,
+        events: Iterable[GameEvent],
+        *,
+        expected_tail_sequence: int,
+    ) -> tuple[GameEventJournalEntry, ...]:
+        """Prepare exact immutable entries without mutating this journal."""
+
+        if (
+            not isinstance(expected_tail_sequence, int)
+            or isinstance(expected_tail_sequence, bool)
+            or expected_tail_sequence < 0
+        ):
+            raise ValueError(
+                "Expected journal tail sequence must be a non-negative integer."
+            )
+        if (
+            isinstance(events, (str, bytes, bytearray, Mapping, AbstractSet))
+            or not isinstance(events, Iterable)
+        ):
+            raise TypeError(
+                "GameEventJournal.prepare_batch requires an ordered "
+                "collection of GameEvent values."
+            )
+
+        batch = tuple(events)
+        batch_ids: set[str] = set()
+        for event in batch:
+            if not isinstance(event, GameEvent):
+                raise TypeError(
+                    "GameEventJournal.prepare_batch requires only GameEvent values."
+                )
+            event.validate()
+            if event.event_id in batch_ids:
+                raise ValueError(
+                    f"Duplicate game event ID in batch: {event.event_id}"
+                )
+            batch_ids.add(event.event_id)
+
+        with self.__lock:
+            if len(self.__entries) != expected_tail_sequence:
+                raise ValueError("Game-event journal tail changed before preparation.")
+            existing_duplicates = batch_ids & self.__event_ids
+            if existing_duplicates:
+                duplicate_id = next(
+                    event.event_id
+                    for event in batch
+                    if event.event_id in existing_duplicates
+                )
+                raise ValueError(f"Duplicate game event ID: {duplicate_id}")
+            return tuple(
+                GameEventJournalEntry(
+                    sequence=expected_tail_sequence + offset + 1,
+                    event=event,
+                )
+                for offset, event in enumerate(batch)
+            )
+
+    def append_prepared_batch(
+        self,
+        entries: Iterable[GameEventJournalEntry],
+        *,
+        expected_tail_sequence: int,
+    ) -> tuple[GameEventJournalEntry, ...]:
+        """Atomically append the exact prepared entries at the expected tail."""
+
+        if (
+            not isinstance(expected_tail_sequence, int)
+            or isinstance(expected_tail_sequence, bool)
+            or expected_tail_sequence < 0
+        ):
+            raise ValueError(
+                "Expected journal tail sequence must be a non-negative integer."
+            )
+        if (
+            isinstance(entries, (str, bytes, bytearray, Mapping, AbstractSet))
+            or not isinstance(entries, Iterable)
+        ):
+            raise TypeError(
+                "GameEventJournal.append_prepared_batch requires an ordered "
+                "entry collection."
+            )
+
+        snapshot = tuple(entries)
+        event_ids: set[str] = set()
+        for offset, entry in enumerate(snapshot):
+            if not isinstance(entry, GameEventJournalEntry):
+                raise TypeError(
+                    "GameEventJournal.append_prepared_batch requires only "
+                    "GameEventJournalEntry values."
+                )
+            entry.event.validate()
+            if entry.sequence != expected_tail_sequence + offset + 1:
+                raise ValueError("Prepared journal entry sequence is invalid.")
+            if entry.event.event_id in event_ids:
+                raise ValueError(
+                    f"Duplicate game event ID in batch: {entry.event.event_id}"
+                )
+            event_ids.add(entry.event.event_id)
+
+        if not snapshot:
+            with self.__lock:
+                if len(self.__entries) != expected_tail_sequence:
+                    raise ValueError(
+                        "Game-event journal tail changed before prepared append."
+                    )
+            return ()
+
+        with self.__lock:
+            if len(self.__entries) != expected_tail_sequence:
+                raise ValueError(
+                    "Game-event journal tail changed before prepared append."
+                )
+            existing_duplicates = event_ids & self.__event_ids
+            if existing_duplicates:
+                duplicate_id = next(
+                    entry.event.event_id
+                    for entry in snapshot
+                    if entry.event.event_id in existing_duplicates
+                )
+                raise ValueError(f"Duplicate game event ID: {duplicate_id}")
+
+            self.__entries = self.__entries + snapshot
+            self.__event_ids = self.__event_ids | event_ids
+            return snapshot
+
+    @classmethod
+    def from_snapshot(
+        cls,
+        entries: tuple[GameEventJournalEntry, ...],
+    ) -> "GameEventJournal":
+        """Construct a fresh journal from one complete immutable snapshot."""
+
+        if not isinstance(entries, tuple):
+            raise ValueError("Journal reconstruction requires an immutable snapshot.")
+        event_ids: set[str] = set()
+        for expected_sequence, entry in enumerate(entries, start=1):
+            if not isinstance(entry, GameEventJournalEntry):
+                raise ValueError("Journal snapshot contains an invalid entry.")
+            entry.event.validate()
+            if entry.sequence != expected_sequence:
+                raise ValueError("Journal snapshot sequence is not contiguous.")
+            if entry.event.event_id in event_ids:
+                raise ValueError("Journal snapshot contains a duplicate event ID.")
+            event_ids.add(entry.event.event_id)
+
+        journal = cls()
+        journal.__entries = entries
+        journal.__event_ids = frozenset(event_ids)
+        return journal
+
     def filter(
         self,
         *,

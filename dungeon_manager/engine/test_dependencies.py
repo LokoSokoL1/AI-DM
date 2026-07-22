@@ -110,7 +110,12 @@ def test_durable_event_journal_store_depends_only_on_event_data_boundaries():
         node.id for node in ast.walk(tree) if isinstance(node, ast.Name)
     }
 
-    assert relative_imports == {"_json", "game_event", "journals"}
+    assert relative_imports == {
+        "_json",
+        "durable_journal",
+        "game_event",
+        "journals",
+    }
     assert "AuditedCommandPipeline" not in accessed_names
     assert "GameEventJournal" not in accessed_names
 
@@ -162,6 +167,7 @@ def test_audited_pipeline_uses_only_existing_engine_and_audit_boundaries():
         "audit",
         "automation",
         "command",
+        "durable_journal",
         "journals",
         "policy_gated_dispatcher",
         "world_state",
@@ -170,6 +176,88 @@ def test_audited_pipeline_uses_only_existing_engine_and_audit_boundaries():
     }
     assert "_handlers" not in accessed_attributes
     assert "handler" not in accessed_attributes
+
+
+def test_durable_capability_has_only_typed_event_data_dependencies():
+    path = Path(__file__).resolve().parent / "durable_journal.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    relative_imports = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level > 0
+    }
+    imported_modules = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+
+    assert relative_imports == {"_json", "journals"}
+    assert "sqlite3" not in imported_modules
+
+
+def test_startup_hydration_uses_no_sqlite_ai_or_dispatch_boundaries():
+    path = Path(__file__).resolve().parent / "startup_hydration.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    relative_imports = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level > 0
+    }
+    imported_modules = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+    accessed_names = {
+        node.id for node in ast.walk(tree) if isinstance(node, ast.Name)
+    }
+
+    assert relative_imports == {
+        "_json",
+        "durable_journal",
+        "event_journal_store",
+        "journals",
+        "world_state",
+        "world_state_holder",
+    }
+    assert "sqlite3" not in imported_modules
+    for forbidden in (
+        "AutomationPolicy",
+        "CommandAuditJournal",
+        "Foundry",
+        "GameEngine",
+        "HumanApprovalDecision",
+        "PolicyGatedCommandDispatcher",
+    ):
+        assert forbidden not in accessed_names
+
+
+def test_sqlite_and_sql_remain_confined_to_event_journal_store():
+    package_root = Path(__file__).resolve().parent
+    for path in sorted(package_root.glob("*.py")):
+        if path.name.startswith("test_"):
+            continue
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+        imported_modules = {
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        }
+        if path.name == "event_journal_store.py":
+            assert "sqlite3" in imported_modules
+            continue
+        assert "sqlite3" not in imported_modules
+        assert "SELECT " not in source
+        assert "INSERT INTO " not in source
+        assert "UPDATE " not in source
+        assert "DELETE FROM " not in source
 
 
 def test_world_state_projection_uses_only_event_data_boundaries():

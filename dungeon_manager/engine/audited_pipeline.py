@@ -19,6 +19,16 @@ from .automation import (
     PolicyDecision,
 )
 from .command import GameCommand
+from .durable_journal import (
+    DurableJournalBinding,
+    DurableJournalHealth,
+    DurableJournalHealthReason,
+    DurableJournalHealthStatus,
+    DurablePublicationResult,
+    DurablePublicationStatus,
+    EventJournalStoreResult,
+    EventJournalStoreStatus,
+)
 from .journals import (
     CommandAuditJournal,
     CommandAuditJournalEntry,
@@ -65,6 +75,16 @@ _POST_DISPATCH_AUDIT_ERROR = (
 _EVENT_PUBLICATION_ERROR = (
     "Event publication failed after engine dispatch; the command and event "
     "batch were not retried."
+)
+_DURABLE_APPEND_ERROR = (
+    "Durable event publication failed; no in-memory events were published."
+)
+_DURABLE_LOCAL_SYNC_ERROR = (
+    "Events were durably committed, but local journal synchronization failed."
+)
+_DURABLE_RUNTIME_UNAVAILABLE_ERROR = (
+    "The durable event-journal runtime is unavailable; fresh startup hydration "
+    "is required."
 )
 _PROJECTION_FAILURE_ERROR = (
     "World-state projection failed after event publication; the command and "
@@ -176,6 +196,8 @@ class AuditedCommandPipelineResult:
     projection_sequence: int
     projection_previous_sequence: int
     projection_target_sequence: int
+    durable_publication: DurablePublicationResult
+    durable_journal_health: DurableJournalHealth
     policy_gated_result: Optional[PolicyGatedDispatchResult] = None
     audit_entries: tuple[CommandAuditJournalEntry, ...] = field(
         default_factory=tuple
@@ -215,6 +237,10 @@ class AuditedCommandPipelineResult:
                 "Projection disposition must be a ProjectionDisposition "
                 "value."
             )
+        if not isinstance(self.durable_publication, DurablePublicationResult):
+            raise ValueError("Durable publication result must be typed.")
+        if not isinstance(self.durable_journal_health, DurableJournalHealth):
+            raise ValueError("Durable journal health must be typed.")
         for sequence, label in (
             (self.projection_sequence, "Projection committed sequence"),
             (
@@ -299,6 +325,7 @@ class AuditedCommandPipelineResult:
 
         self._validate_publication()
         self._validate_projection()
+        self._validate_durability()
 
         if self.audit_status is AuditIntegrationStatus.COMPLETED:
             if self.policy_gated_result is None:
@@ -341,12 +368,51 @@ class AuditedCommandPipelineResult:
     def to_dict(self) -> dict[str, Any]:
         """Return an independent defensive JSON-compatible representation."""
 
+        published_entries = [
+            entry.to_dict() for entry in self.published_event_entries
+        ]
+        policy_result = (
+            None
+            if self.policy_gated_result is None
+            else self.policy_gated_result.to_dict()
+        )
+        if (
+            self.durable_journal_health.status
+            is not DurableJournalHealthStatus.NOT_CONFIGURED
+        ):
+            published_entries = [
+                {
+                    "event_id": entry.event.event_id,
+                    "event_type": entry.event.event_type,
+                    "schema_version": entry.event.schema_version,
+                    "sequence": entry.sequence,
+                }
+                for entry in self.published_event_entries
+            ]
+            if policy_result is not None:
+                game_result = self.policy_gated_result.game_result
+                policy_result["game_result"] = (
+                    None
+                    if game_result is None
+                    else {
+                        "command_id": game_result.command_id,
+                        "error": game_result.error,
+                        "event_count": len(game_result.events),
+                        "status": game_result.status.value,
+                    }
+                )
+                approval = policy_result.get("approval_decision")
+                if isinstance(approval, dict):
+                    approval.pop("reason", None)
+
         return {
             "audit_entries": [
                 entry.to_dict() for entry in self.audit_entries
             ],
             "audit_status": self.audit_status.value,
             "command_id": self.command_id,
+            "durable_journal_health": self.durable_journal_health.to_dict(),
+            "durable_publication": self.durable_publication.to_dict(),
             "error": self.error,
             "publication_disposition": self.publication_disposition.value,
             "publication_error": self.publication_error,
@@ -365,14 +431,8 @@ class AuditedCommandPipelineResult:
                 if self.projector_status is None
                 else self.projector_status.value
             ),
-            "published_event_entries": [
-                entry.to_dict() for entry in self.published_event_entries
-            ],
-            "policy_gated_result": (
-                None
-                if self.policy_gated_result is None
-                else self.policy_gated_result.to_dict()
-            ),
+            "published_event_entries": published_entries,
+            "policy_gated_result": policy_result,
         }
 
     def _validate_publication(self) -> None:
@@ -613,7 +673,6 @@ class AuditedCommandPipelineResult:
                 is not EventPublicationDisposition.NOT_APPLICABLE
                 or self.projection_sequence
                 != self.projection_previous_sequence
-                or self.projection_reason_code is None
                 or self.projector_status is WorldStateProjectionStatus.SUCCESS
                 or (
                     self.policy_gated_result is not None
@@ -623,6 +682,15 @@ class AuditedCommandPipelineResult:
                 raise ValueError(
                     "Unavailable projection must fail closed before dispatch."
                 )
+            if (
+                self.projection_reason_code is None
+                and self.durable_journal_health.status
+                is not DurableJournalHealthStatus.UNAVAILABLE
+            ):
+                raise ValueError(
+                    "Unavailable projection requires projection or durable "
+                    "health metadata."
+                )
             validate_trimmed_identifier(
                 self.projection_error,
                 "Projection error",
@@ -630,6 +698,49 @@ class AuditedCommandPipelineResult:
             return
 
         raise ValueError("Unsupported projection disposition.")
+
+    def _validate_durability(self) -> None:
+        status = self.durable_publication.status
+        health_status = self.durable_journal_health.status
+        if status is DurablePublicationStatus.NOT_CONFIGURED:
+            if health_status is not DurableJournalHealthStatus.NOT_CONFIGURED:
+                raise ValueError("Non-durable publication requires non-durable health.")
+            return
+        if health_status is DurableJournalHealthStatus.NOT_CONFIGURED:
+            raise ValueError("Durable publication requires configured durable health.")
+        if status is DurablePublicationStatus.NOT_APPLICABLE:
+            if self.publication_disposition is not EventPublicationDisposition.NOT_APPLICABLE:
+                raise ValueError("Non-applicable durable publication must not publish.")
+            return
+        if status is DurablePublicationStatus.NO_EVENTS:
+            if self.publication_disposition is not EventPublicationDisposition.NO_EVENTS:
+                raise ValueError("Durable no-events status requires an eventless result.")
+            return
+        if status is DurablePublicationStatus.COMMITTED_SYNCHRONIZED:
+            if (
+                self.publication_disposition is not EventPublicationDisposition.PUBLISHED
+                or self.projection_disposition is not ProjectionDisposition.PROJECTED
+                or health_status is not DurableJournalHealthStatus.SYNCHRONIZED
+            ):
+                raise ValueError("Committed durable publication must be synchronized.")
+            return
+        if status is DurablePublicationStatus.COMMITTED_PROJECTION_FAILED:
+            if (
+                self.publication_disposition is not EventPublicationDisposition.PUBLISHED
+                or self.projection_disposition is not ProjectionDisposition.FAILED
+                or health_status is not DurableJournalHealthStatus.SYNCHRONIZED
+            ):
+                raise ValueError("Durable projection failure must retain journal agreement.")
+            return
+        if status is DurablePublicationStatus.COMMITTED_LOCAL_SYNC_FAILED:
+            if (
+                self.publication_disposition is not EventPublicationDisposition.FAILED
+                or health_status is not DurableJournalHealthStatus.UNAVAILABLE
+            ):
+                raise ValueError("Local synchronization failure must block the runtime.")
+            return
+        if self.publication_disposition is not EventPublicationDisposition.FAILED:
+            raise ValueError("Uncommitted durable failures require failed publication.")
 
 
 class _AuditAppendFailure(Exception):
@@ -644,6 +755,84 @@ class _ProjectionFailure(Exception):
     """Internal signal that published entries could not be projected."""
 
 
+class _DurableRuntimeState:
+    """Thread-safe durable/local agreement state for one pipeline instance."""
+
+    def __init__(
+        self,
+        binding: Optional[DurableJournalBinding],
+        *,
+        local_tail: int,
+        state_sequence: int,
+    ) -> None:
+        self._binding = binding
+        self._lock = Lock()
+        if binding is None:
+            self._health = DurableJournalHealth(
+                DurableJournalHealthStatus.NOT_CONFIGURED,
+                None,
+                0,
+                local_tail,
+            )
+        elif binding.tail_sequence == local_tail == state_sequence:
+            self._health = DurableJournalHealth(
+                DurableJournalHealthStatus.SYNCHRONIZED,
+                binding.journal_id,
+                binding.tail_sequence,
+                local_tail,
+            )
+        else:
+            self._health = DurableJournalHealth(
+                DurableJournalHealthStatus.UNAVAILABLE,
+                binding.journal_id,
+                binding.tail_sequence,
+                local_tail,
+                DurableJournalHealthReason.INITIAL_TAIL_MISMATCH,
+            )
+
+    @property
+    def binding(self) -> Optional[DurableJournalBinding]:
+        return self._binding
+
+    @property
+    def health(self) -> DurableJournalHealth:
+        with self._lock:
+            return self._health
+
+    def advance(self, tail: int) -> None:
+        binding = self._binding
+        if binding is None:
+            raise ValueError("Non-durable runtime cannot advance durable health.")
+        with self._lock:
+            if self._health.status is not DurableJournalHealthStatus.SYNCHRONIZED:
+                raise ValueError("Unavailable durable runtime cannot advance.")
+            self._health = DurableJournalHealth(
+                DurableJournalHealthStatus.SYNCHRONIZED,
+                binding.journal_id,
+                tail,
+                tail,
+            )
+
+    def make_unavailable(
+        self,
+        reason: DurableJournalHealthReason,
+        *,
+        durable_tail: int,
+        local_tail: int,
+    ) -> None:
+        binding = self._binding
+        if binding is None:
+            raise ValueError("Non-durable runtime cannot become durably unavailable.")
+        with self._lock:
+            self._health = DurableJournalHealth(
+                DurableJournalHealthStatus.UNAVAILABLE,
+                binding.journal_id,
+                durable_tail,
+                local_tail,
+                reason,
+            )
+
+
 class _AuditedLifecycleRecorder:
     """Translate authoritative lifecycle observations into safe records."""
 
@@ -654,6 +843,7 @@ class _AuditedLifecycleRecorder:
         event_journal: GameEventJournal,
         projector: WorldStateProjector,
         state_holder: WorldStateHolder,
+        durable_runtime: _DurableRuntimeState,
         audit_record_id_factory: AuditRecordIdFactory,
         clock: UtcClock,
     ) -> None:
@@ -662,6 +852,7 @@ class _AuditedLifecycleRecorder:
         self._event_journal = event_journal
         self._projector = projector
         self._state_holder = state_holder
+        self._durable_runtime = durable_runtime
         self._audit_record_id_factory = audit_record_id_factory
         self._clock = clock
         self._entries: tuple[CommandAuditJournalEntry, ...] = ()
@@ -682,6 +873,18 @@ class _AuditedLifecycleRecorder:
         self._projector_status: Optional[WorldStateProjectionStatus] = None
         self._dispatch_result: Optional[PolicyGatedDispatchResult] = None
         self._engine_boundary_crossed = False
+        binding = durable_runtime.binding
+        if binding is None:
+            self._durable_publication = DurablePublicationResult(
+                DurablePublicationStatus.NOT_CONFIGURED
+            )
+        else:
+            self._durable_publication = DurablePublicationResult(
+                DurablePublicationStatus.NOT_APPLICABLE,
+                journal_id=binding.journal_id,
+                previous_tail=health.journal_sequence,
+                resulting_tail=health.journal_sequence,
+            )
 
     @property
     def entries(self) -> tuple[CommandAuditJournalEntry, ...]:
@@ -735,6 +938,14 @@ class _AuditedLifecycleRecorder:
     def engine_boundary_crossed(self) -> bool:
         return self._engine_boundary_crossed
 
+    @property
+    def durable_publication(self) -> DurablePublicationResult:
+        return self._durable_publication
+
+    @property
+    def durable_journal_health(self) -> DurableJournalHealth:
+        return self._durable_runtime.health
+
     def command_proposed(self) -> None:
         self._append(AuditStage.COMMAND_PROPOSED, "received")
 
@@ -777,6 +988,35 @@ class _AuditedLifecycleRecorder:
                     if self._projector_status is None
                     else self._projector_status.value
                 ),
+            },
+        )
+
+    def prepare_durable_unavailable(
+        self,
+        health: DurableJournalHealth,
+    ) -> None:
+        if health.status is not DurableJournalHealthStatus.UNAVAILABLE:
+            raise ValueError("Durable unavailability requires unavailable health.")
+        self._projection_disposition = ProjectionDisposition.UNAVAILABLE
+        self._projection_previous_sequence = self._state_holder.snapshot.last_sequence
+        self._projection_target_sequence = health.local_tail
+        self._projection_error = _DURABLE_RUNTIME_UNAVAILABLE_ERROR
+        self._projection_reason_code = None
+        self._projector_status = None
+
+    def record_durable_unavailable(self) -> None:
+        health = self._durable_runtime.health
+        if health.status is not DurableJournalHealthStatus.UNAVAILABLE:
+            raise ValueError("Durable runtime unavailability was not prepared.")
+        self._append(
+            AuditStage.COORDINATOR_FAILURE,
+            "durable_journal_unavailable",
+            {
+                "durable_health_status": health.status.value,
+                "durable_reason_code": health.reason_code.value,
+                "durable_tail": health.durable_tail,
+                "local_tail": health.local_tail,
+                "phase": "durable_journal",
             },
         )
 
@@ -863,6 +1103,15 @@ class _AuditedLifecycleRecorder:
             self._publication_disposition = (
                 EventPublicationDisposition.NO_EVENTS
             )
+            binding = self._durable_runtime.binding
+            if binding is not None:
+                tail = self._event_journal.tail_sequence
+                self._durable_publication = DurablePublicationResult(
+                    DurablePublicationStatus.NO_EVENTS,
+                    journal_id=binding.journal_id,
+                    previous_tail=tail,
+                    resulting_tail=tail,
+                )
             health = self._state_holder.health
             self._projection_disposition = ProjectionDisposition.UNCHANGED
             self._projection_previous_sequence = health.committed_sequence
@@ -881,6 +1130,9 @@ class _AuditedLifecycleRecorder:
         )
 
     def _publish_event_batch(self, events: tuple[Any, ...]) -> None:
+        if self._durable_runtime.binding is not None:
+            self._publish_durable_event_batch(events)
+            return
         try:
             entries = self._event_journal.append_batch(events)
             if not isinstance(entries, tuple):
@@ -928,6 +1180,236 @@ class _AuditedLifecycleRecorder:
 
         self._published_event_entries = entries
         self._publication_disposition = EventPublicationDisposition.PUBLISHED
+
+    def _publish_durable_event_batch(self, events: tuple[Any, ...]) -> None:
+        binding = self._durable_runtime.binding
+        if binding is None:
+            raise ValueError("Durable publication requires a durable binding.")
+        expected_tail = self._event_journal.tail_sequence
+        try:
+            prepared_entries = self._event_journal.prepare_batch(
+                events,
+                expected_tail_sequence=expected_tail,
+            )
+        except Exception:
+            logger.error(
+                "Durable event preparation failed safely "
+                "(command_id=%s, event_count=%s)",
+                self._command.command_id,
+                len(events),
+            )
+            self._durable_publication = DurablePublicationResult(
+                DurablePublicationStatus.NOT_COMMITTED,
+                journal_id=binding.journal_id,
+                previous_tail=expected_tail,
+                resulting_tail=expected_tail,
+                reason_code="entry_preparation_failed",
+                error=_DURABLE_APPEND_ERROR,
+            )
+            self._fail_event_publication(events, _DURABLE_APPEND_ERROR)
+
+        try:
+            store_result = binding.store.append(
+                prepared_entries,
+                expected_tail_sequence=expected_tail,
+                expected_journal_id=binding.journal_id,
+            )
+        except Exception:
+            logger.error(
+                "Durable event append contract failed safely "
+                "(command_id=%s, event_count=%s)",
+                self._command.command_id,
+                len(events),
+            )
+            self._durable_runtime.make_unavailable(
+                DurableJournalHealthReason.STORAGE_UNAVAILABLE,
+                durable_tail=expected_tail,
+                local_tail=expected_tail,
+            )
+            self._durable_publication = DurablePublicationResult(
+                DurablePublicationStatus.STORAGE_UNAVAILABLE,
+                journal_id=binding.journal_id,
+                previous_tail=expected_tail,
+                resulting_tail=expected_tail,
+                reason_code="store_append_failed",
+                error=_DURABLE_APPEND_ERROR,
+            )
+            self._fail_event_publication(events, _DURABLE_APPEND_ERROR)
+
+        if not isinstance(store_result, EventJournalStoreResult):
+            self._mark_store_result_mismatch(expected_tail, len(events))
+            self._fail_event_publication(events, _DURABLE_APPEND_ERROR)
+
+        if store_result.status is not EventJournalStoreStatus.SUCCESS:
+            self._handle_store_rejection(store_result, expected_tail)
+            self._fail_event_publication(events, _DURABLE_APPEND_ERROR)
+
+        resulting_tail = expected_tail + len(prepared_entries)
+        if (
+            store_result.journal_id != binding.journal_id
+            or store_result.previous_tail != expected_tail
+            or store_result.tail_sequence != resulting_tail
+            or store_result.appended_count != len(prepared_entries)
+            or store_result.entries is not None
+        ):
+            self._mark_store_result_mismatch(expected_tail, len(prepared_entries))
+            self._fail_event_publication(events, _DURABLE_APPEND_ERROR)
+
+        committed = DurablePublicationResult(
+            DurablePublicationStatus.COMMITTED_SYNCHRONIZED,
+            journal_id=binding.journal_id,
+            previous_tail=expected_tail,
+            resulting_tail=resulting_tail,
+            appended_count=len(prepared_entries),
+            durable_commit_confirmed=True,
+        )
+        try:
+            appended_entries = self._event_journal.append_prepared_batch(
+                prepared_entries,
+                expected_tail_sequence=expected_tail,
+            )
+            if (
+                not isinstance(appended_entries, tuple)
+                or len(appended_entries) != len(prepared_entries)
+                or any(
+                    appended is not prepared
+                    for appended, prepared in zip(
+                        appended_entries,
+                        prepared_entries,
+                    )
+                )
+            ):
+                raise ValueError("Local journal did not preserve prepared entries.")
+        except Exception:
+            local_tail = self._event_journal.tail_sequence
+            self._durable_runtime.make_unavailable(
+                DurableJournalHealthReason.LOCAL_SYNCHRONIZATION_FAILED,
+                durable_tail=resulting_tail,
+                local_tail=local_tail,
+            )
+            self._durable_publication = DurablePublicationResult(
+                DurablePublicationStatus.COMMITTED_LOCAL_SYNC_FAILED,
+                journal_id=committed.journal_id,
+                previous_tail=committed.previous_tail,
+                resulting_tail=committed.resulting_tail,
+                appended_count=committed.appended_count,
+                durable_commit_confirmed=True,
+                reason_code="local_journal_append_failed",
+                error=_DURABLE_LOCAL_SYNC_ERROR,
+            )
+            self._fail_event_publication(events, _DURABLE_LOCAL_SYNC_ERROR)
+
+        self._durable_runtime.advance(resulting_tail)
+        self._durable_publication = committed
+        self._published_event_entries = appended_entries
+        self._publication_disposition = EventPublicationDisposition.PUBLISHED
+
+    def _handle_store_rejection(
+        self,
+        store_result: EventJournalStoreResult,
+        expected_tail: int,
+    ) -> None:
+        binding = self._durable_runtime.binding
+        if binding is None:
+            raise ValueError("Store rejection requires a durable binding.")
+        durable_tail = (
+            store_result.tail_sequence
+            if store_result.tail_sequence is not None
+            else store_result.previous_tail
+            if store_result.previous_tail is not None
+            else expected_tail
+        )
+        if store_result.status in {
+            EventJournalStoreStatus.STALE_TAIL,
+            EventJournalStoreStatus.JOURNAL_ID_MISMATCH,
+        }:
+            status = DurablePublicationStatus.DIVERGED
+            health_reason = (
+                DurableJournalHealthReason.STALE_DURABLE_TAIL
+                if store_result.status is EventJournalStoreStatus.STALE_TAIL
+                else DurableJournalHealthReason.JOURNAL_ID_MISMATCH
+            )
+            self._durable_runtime.make_unavailable(
+                health_reason,
+                durable_tail=durable_tail,
+                local_tail=expected_tail,
+            )
+        elif store_result.status in {
+            EventJournalStoreStatus.NOT_FOUND,
+            EventJournalStoreStatus.CORRUPT,
+            EventJournalStoreStatus.UNSUPPORTED_VERSION,
+            EventJournalStoreStatus.STORAGE_FAILURE,
+        }:
+            status = DurablePublicationStatus.STORAGE_UNAVAILABLE
+            self._durable_runtime.make_unavailable(
+                DurableJournalHealthReason.STORAGE_UNAVAILABLE,
+                durable_tail=durable_tail,
+                local_tail=expected_tail,
+            )
+        else:
+            status = DurablePublicationStatus.NOT_COMMITTED
+        self._durable_publication = DurablePublicationResult(
+            status,
+            journal_id=binding.journal_id,
+            previous_tail=expected_tail,
+            resulting_tail=durable_tail,
+            reason_code=store_result.reason_code or "store_append_rejected",
+            error=_DURABLE_APPEND_ERROR,
+        )
+
+    def _mark_store_result_mismatch(
+        self,
+        expected_tail: int,
+        event_count: int,
+    ) -> None:
+        binding = self._durable_runtime.binding
+        if binding is None:
+            raise ValueError("Store result mismatch requires a durable binding.")
+        self._durable_runtime.make_unavailable(
+            DurableJournalHealthReason.STORE_RESULT_MISMATCH,
+            durable_tail=expected_tail + event_count,
+            local_tail=expected_tail,
+        )
+        self._durable_publication = DurablePublicationResult(
+            DurablePublicationStatus.STORAGE_UNAVAILABLE,
+            journal_id=binding.journal_id,
+            previous_tail=expected_tail,
+            resulting_tail=expected_tail + event_count,
+            reason_code="store_result_mismatch",
+            error=_DURABLE_APPEND_ERROR,
+        )
+
+    def _fail_event_publication(
+        self,
+        events: tuple[Any, ...],
+        error: str,
+    ) -> None:
+        self._publication_disposition = EventPublicationDisposition.FAILED
+        self._publication_error = error
+        details = {
+            "event_count": len(events),
+            "phase": "event_publication",
+            "publication_disposition": EventPublicationDisposition.FAILED.value,
+        }
+        if self._durable_runtime.binding is not None:
+            details.update(
+                {
+                    "durable_commit_confirmed": (
+                        self._durable_publication.durable_commit_confirmed
+                    ),
+                    "durable_status": self._durable_publication.status.value,
+                    "reason_code": self._durable_publication.reason_code,
+                }
+            )
+        try:
+            self._append(
+                AuditStage.COORDINATOR_FAILURE,
+                "event_publication_failed",
+                details,
+            )
+        except _AuditAppendFailure:
+            pass
+        raise _EventPublicationFailure from None
 
     def _project_published_entries(self) -> None:
         state = self._state_holder.snapshot
@@ -996,6 +1478,21 @@ class _AuditedLifecycleRecorder:
         reason_code: ProjectionReasonCode,
         projector_status: Optional[WorldStateProjectionStatus],
     ) -> None:
+        if (
+            self._durable_publication.status
+            is DurablePublicationStatus.COMMITTED_SYNCHRONIZED
+        ):
+            committed = self._durable_publication
+            self._durable_publication = DurablePublicationResult(
+                DurablePublicationStatus.COMMITTED_PROJECTION_FAILED,
+                journal_id=committed.journal_id,
+                previous_tail=committed.previous_tail,
+                resulting_tail=committed.resulting_tail,
+                appended_count=committed.appended_count,
+                durable_commit_confirmed=True,
+                reason_code="projection_failed_after_durable_commit",
+                error=_PROJECTION_FAILURE_ERROR,
+            )
         self._projection_disposition = ProjectionDisposition.FAILED
         self._projection_error = _PROJECTION_FAILURE_ERROR
         self._projection_reason_code = reason_code
@@ -1131,6 +1628,7 @@ class AuditedCommandPipeline:
         projector: WorldStateProjector,
         state_holder: WorldStateHolder,
         *,
+        durable_journal_binding: Optional[DurableJournalBinding] = None,
         audit_record_id_factory: AuditRecordIdFactory = (
             _generate_audit_record_id
         ),
@@ -1156,6 +1654,14 @@ class AuditedCommandPipeline:
             raise ValueError(
                 "Audited command pipeline requires a world-state holder."
             )
+        if (
+            durable_journal_binding is not None
+            and not isinstance(durable_journal_binding, DurableJournalBinding)
+        ):
+            raise ValueError(
+                "Durable audited pipeline construction requires a validated "
+                "durable journal binding."
+            )
         if not callable(audit_record_id_factory):
             raise ValueError("Audit record ID factory must be callable.")
         if not callable(clock):
@@ -1171,10 +1677,23 @@ class AuditedCommandPipeline:
         self._coordination_lock = Lock()
         self._coordination_context = local()
 
+        initial_tail = self._journal_tail_sequence()
+        self._durable_runtime = _DurableRuntimeState(
+            durable_journal_binding,
+            local_tail=initial_tail,
+            state_sequence=state_holder.snapshot.last_sequence,
+        )
+
         self._state_holder._check_journal_sequence(
-            self._journal_tail_sequence(),
+            initial_tail,
             ProjectionReasonCode.INITIAL_SEQUENCE_MISMATCH,
         )
+
+    @property
+    def durable_journal_health(self) -> DurableJournalHealth:
+        """Return safe durable/local agreement metadata."""
+
+        return self._durable_runtime.health
 
     def dispatch(
         self,
@@ -1232,6 +1751,18 @@ class AuditedCommandPipeline:
         previous_state = self._state_holder.snapshot
         previous_sequence = previous_state.last_sequence
         captured_tail = self._state_holder.health.journal_sequence
+
+        if (
+            self._durable_runtime.health.status
+            is DurableJournalHealthStatus.UNAVAILABLE
+        ):
+            return self._recovery_failure_result(
+                strategy,
+                WorldStateRecoveryStatus.UNAVAILABLE,
+                previous_sequence,
+                self._event_journal.tail_sequence,
+                _DURABLE_RUNTIME_UNAVAILABLE_ERROR,
+            )
 
         try:
             journal_snapshot = self._event_journal.entries
@@ -1479,9 +2010,28 @@ class AuditedCommandPipeline:
             self._event_journal,
             self._projector,
             self._state_holder,
+            self._durable_runtime,
             self._audit_record_id_factory,
             self._clock,
         )
+
+        durable_health = self._durable_runtime.health
+        if durable_health.status is DurableJournalHealthStatus.UNAVAILABLE:
+            recorder.prepare_durable_unavailable(durable_health)
+            try:
+                recorder.command_proposed()
+                recorder.record_durable_unavailable()
+            except _AuditAppendFailure:
+                return self._result_from_recorder(
+                    recorder,
+                    AuditIntegrationStatus.PRE_DISPATCH_AUDIT_FAILURE,
+                    _PRE_DISPATCH_AUDIT_ERROR,
+                )
+            return self._result_from_recorder(
+                recorder,
+                AuditIntegrationStatus.CONTROLLED_INTEGRATION_FAILURE,
+                _DURABLE_RUNTIME_UNAVAILABLE_ERROR,
+            )
 
         health = self._state_holder.health
         if health.status is WorldStateSynchronizationStatus.SYNCHRONIZED:
@@ -1525,7 +2075,7 @@ class AuditedCommandPipeline:
             return self._result_from_recorder(
                 recorder,
                 AuditIntegrationStatus.POST_DISPATCH_AUDIT_FAILURE,
-                _EVENT_PUBLICATION_ERROR,
+                recorder.publication_error or _EVENT_PUBLICATION_ERROR,
             )
         except _AuditAppendFailure:
             status = (
@@ -1581,6 +2131,8 @@ class AuditedCommandPipeline:
                 recorder.projection_previous_sequence
             ),
             projection_target_sequence=recorder.projection_target_sequence,
+            durable_publication=recorder.durable_publication,
+            durable_journal_health=recorder.durable_journal_health,
             policy_gated_result=preserved_result,
             audit_entries=recorder.entries,
             published_event_entries=recorder.published_event_entries,
@@ -1606,6 +2158,19 @@ class AuditedCommandPipeline:
             projection_sequence=health.committed_sequence,
             projection_previous_sequence=health.committed_sequence,
             projection_target_sequence=self._journal_tail_sequence(),
+            durable_publication=(
+                DurablePublicationResult(
+                    DurablePublicationStatus.NOT_CONFIGURED
+                )
+                if self._durable_runtime.binding is None
+                else DurablePublicationResult(
+                    DurablePublicationStatus.NOT_APPLICABLE,
+                    journal_id=self._durable_runtime.binding.journal_id,
+                    previous_tail=self._journal_tail_sequence(),
+                    resulting_tail=self._journal_tail_sequence(),
+                )
+            ),
+            durable_journal_health=self._durable_runtime.health,
             error=_REENTRANT_PIPELINE_ERROR,
             projection_error=_REENTRANT_PIPELINE_ERROR,
             projection_reason_code=ProjectionReasonCode.REENTRANT_INVOCATION,

@@ -758,17 +758,35 @@ identity, digest, and strict constructor-based event decoding. Any bad row
 returns a controlled corruption result with no partial history and no repair,
 rewrite, truncation, or migration.
 
-Append accepts already-sequenced immutable journal entries and an expected
-durable tail. It fully materializes and validates the batch, takes one SQLite
-write transaction with WAL and full synchronous commits, validates the complete
-durable history inside that transaction, rejects a stale tail or any duplicate
-event ID, then inserts the whole contiguous range or rolls it back. Empty
-batches are successful only at the matching tail. Connections and cursors are
+Append accepts already-sequenced immutable journal entries, an expected durable
+tail, and an optional expected journal identity. It fully materializes and
+validates the batch, takes one SQLite write transaction with WAL and full
+synchronous commits, validates the complete durable history inside that
+transaction, rejects a stale tail, journal mismatch, or duplicate event ID,
+then inserts the whole contiguous range or rolls it back. Empty batches are
+successful only at the matching tail. Connections and cursors are
 operation-scoped; SQLite and filesystem failures become safe typed results with
-no raw exceptions, SQL, paths, or event payloads. This standalone store does
-not yet persist pipeline publication, hydrate an in-memory journal at startup,
-coordinate commands across processes, persist audit records, or persist world
-state.
+no raw exceptions, SQL, paths, or event payloads.
+
+For an explicitly durable runtime, SQLite is the authoritative event history
+across process restarts. `GameEventJournal` is its synchronized process-local
+view and `WorldStateHolder` is a derived projection. `GameEventJournal` can
+prepare one exact immutable contiguous entry batch without mutation, atomically
+append those exact prepared objects at an unchanged expected tail, and construct
+a fresh journal from one fully validated immutable snapshot. It still exposes
+no active-journal replacement, update, delete, truncate, reorder, or repair API.
+
+`hydrate_durable_runtime()` is the explicit all-or-nothing startup boundary. It
+requires an existing `EventJournalStore`, an exact expected journal ID, an
+explicit immutable sequence-zero `WorldState`, and the existing projector. It
+does not initialize missing storage. It loads and validates the complete store
+snapshot, checks identity, constructs a fresh in-memory journal, projects the
+complete ordered history from the supplied base, verifies durable, local, and
+state tails, and only then exposes a typed runtime bundle containing the journal,
+holder, and validated durable binding. An initialized empty store returns the
+caller-supplied sequence-zero base without invoking reducers. Failure exposes no
+partial runtime, entries, or state and performs no append, rewrite, dispatch,
+policy, approval, replay, audit, handler, engine, AI, migration, or repair work.
 
 
 ## Audited Command Pipeline, Event Publication, and Projection Integration
@@ -777,15 +795,21 @@ The optional audited and event-publication flow is:
 
 **GameCommand → AuditedCommandPipeline → PolicyGatedCommandDispatcher →
 policy and approval gate → optional GameEngine.dispatch() → preserved
-PolicyGatedDispatchResult → atomic GameEventJournal publication → exact-entry
-WorldState projection → controlled audit integration result**
+PolicyGatedDispatchResult → exact immutable entry preparation → optional
+durable append → exact-entry in-memory publication → WorldState projection →
+controlled audit integration result**
 
 `AuditedCommandPipeline` accepts a `GameCommand` and optional
 `HumanApprovalDecision`, delegates the complete behavioral submission to the
 existing `PolicyGatedCommandDispatcher`, and appends typed records to one
 injected `CommandAuditJournal`. It also requires an explicitly injected
 `GameEventJournal` and publishes only the exact ordered non-empty event tuple
-from a preserved `DISPATCHED` result through one `append_batch()` call. It does
+from a preserved `DISPATCHED` result. Existing construction without a durable
+binding retains the explicit process-local `append_batch()` behavior. Durable
+construction requires a validated `DurableJournalBinding`; it never silently
+falls back to in-memory-only publication. The pipeline depends on the binding's
+small typed append capability and contains no SQLite, SQL, filesystem, or
+database-path behavior. It does
 not evaluate policy, resolve approvals, manage replay state, select a handler,
 call a handler, reinterpret a `GameResult`, or repeat dispatch after a
 publication or projection failure. The pipeline now also requires one explicit
@@ -843,6 +867,17 @@ sequences, a controlled reason code, the typed projector status, and safe error
 text. Complete world-state data is available only through the holder's immutable
 `snapshot` API and is never copied into audit details or projection errors.
 
+Durable submissions also carry immutable `DurablePublicationResult` and
+`DurableJournalHealth` metadata. Publication statuses distinguish unconfigured
+or inapplicable operation, eventless success, no confirmed commit, complete
+durable/local/state synchronization, confirmed commit followed by local or
+projection failure, stale or divergent authority, and unavailable or uncertain
+storage. Metadata is limited to journal identity, expected and resulting tails,
+appended count, commitment confirmation, and controlled reasons. Durable result
+serialization omits event payloads, handler output, world-state data, reducer
+output, SQL, database paths, raw exceptions, prompts, credentials, and approval
+reasons.
+
 `WorldStateHolder` owns one explicit initial immutable `WorldState`, exposes its
 snapshot and payload-free synchronization health, and has no public mutation,
 patch, delete, rollback, recovery, or rebuild API. Pipeline construction compares
@@ -859,31 +894,48 @@ append, including `DISPATCH_ATTEMPTED`, must succeed before replay is consumed
 and before `GameEngine.dispatch()` is called. A failure therefore closes the
 gate without handler invocation. Once the engine boundary is crossed, a later
 audit failure preserves the original dispatch result and consumed replay state.
-Validated result events are published atomically before the final
-`DISPATCH_COMPLETED` audit append. Successful publication is immediately
-followed by projection of exactly its returned entries while the pipeline's one
-outer coordination lock remains held. A non-reentrant thread-local guard rejects
-same-thread recursive dispatch or recovery before policy evaluation, replay
+For a durable event batch, the pipeline prepares the exact immutable entries at
+the current local tail without mutation, calls the durable append exactly once,
+and verifies the successful journal ID, previous tail, resulting tail, and
+appended count. Only then does it atomically append those same entry objects to
+the in-memory journal. It never regenerates IDs, timestamps, payloads, or
+sequences. Eventless success performs no durable write. Successful local
+publication is immediately followed by projection of exactly its entries while
+the pipeline's one outer coordination lock remains held. A non-reentrant
+thread-local guard rejects same-thread recursive dispatch or recovery before
+policy evaluation, replay
 consumption, or reducer re-entry; other concurrent dispatch and recovery callers
 wait and then use the state committed by the preceding call. This keeps journal
 and projection order identical and prevents lost state updates.
 
-Publication failure leaves the entire new batch absent, preserves completed
-dispatch and consumed replay state, skips projection, and is not retried.
-Projection failure leaves published entries present, preserves completed
-dispatch and replay state, leaves the prior committed state unchanged, marks
-projection out of sync, and blocks every later submission before engine
-dispatch. Successful publication and projection survive a later audit failure.
+Failure before durable commit leaves durable history, in-memory history, and
+world state unchanged. Store rejection or failure is never retried and never
+repeats the handler. Stale external advancement, journal mismatch, unavailable
+storage, and uncertain store results mark durable health unavailable and block
+later dispatch until a fresh startup hydration succeeds; in-memory projection
+recovery cannot clear that condition. Once the store confirms success, the
+events are authoritative and are never rolled back, deleted, or rewritten. If
+the exact local append then fails, the durable commit remains, no partial local
+batch or state is exposed, durable health becomes unavailable, and restart
+hydration is the repair boundary. A crash at that point has the same recovery
+path.
+
+Projection failure after durable and local publication leaves both journal
+views at the committed tail, preserves the prior world state, marks only
+projection health out of sync, and allows the existing explicit projection
+recovery path; that recovery performs no durable append. Successful publication
+and projection survive a later audit failure.
 The audit journal, event journal, and committed world state are deliberately not
 transactionally coupled: once dispatch occurs, successful event/state or audit
 updates are never rolled back. No failure path reinvokes the engine, dispatcher,
 handler, publication operation, or reducer.
 
-Auditing, event publication, and replay protection remain process-local and
-non-durable. They do not provide restart-safe idempotency or publication
-recovery, persistence, tamper evidence, queues, transactions, retries, or
-automatic world-state recovery/rebuild. The explicit process-local recovery
-boundary below does not make any of these components durable.
+Command audit records, replay protection, and projected world state remain
+process-local and non-durable. Durable event history does not provide durable
+command idempotency, audit persistence, world-state snapshots, automatic
+rehydration, migrations, repair, cross-process command locks, queues,
+subscribers, polling, retries, compaction, rollback, encryption, or authenticated
+signatures.
 
 
 ## World State Projection Foundation
@@ -991,10 +1043,12 @@ resolution, replay protection, event publication, or either journal's append
 operation. It consumes no command ID, creates no game event or command audit
 record, and is never entered automatically from ordinary dispatch. Failed
 recovery does not commit partial state or invalidate a synchronized state merely
-because an optional rebuild failed. Durable journals, persistence, journal
-repair or rewriting, migrations, rollback, transactions, loading, subscribers,
-queues, background workers, authorization, and real gameplay reducers remain
-outside this milestone.
+because an optional rebuild failed. In a durable pipeline, recovery is allowed
+only while durable and in-memory journal health remains synchronized; it cannot
+clear stale, divergent, or uncertain durable health. Journal repair or rewriting,
+migrations, rollback, durable world-state snapshots, subscribers, queues,
+background workers, authorization, and real gameplay reducers remain outside
+this milestone.
 
 
 ## Tool Call Parsing Boundary

@@ -179,6 +179,21 @@ def test_empty_append_and_competing_store_reject_stale_tail(tmp_path):
     assert first.load().tail_sequence == 1
 
 
+def test_expected_journal_identity_mismatch_rejects_before_append(tmp_path):
+    store = initialized_store(tmp_path, "actual-journal")
+
+    result = store.append(
+        (entry(1),),
+        expected_tail_sequence=0,
+        expected_journal_id="different-journal",
+    )
+
+    assert result.status is EventJournalStoreStatus.JOURNAL_ID_MISMATCH
+    assert result.journal_id == "actual-journal"
+    assert result.appended_count == 0
+    assert store.load().entries == ()
+
+
 @pytest.mark.parametrize(
     "entries",
     [

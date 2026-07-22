@@ -30,14 +30,16 @@ Game Engine Foundation
 
 
 
-Durable Event Journal Persistence Foundation. `EventJournalStore` is an
-explicit path-bound SQLite boundary for immutable sequenced
-`GameEventJournalEntry` batches. It stores journal identity, format, and schema
-metadata; uses WAL plus full synchronous SQLite transactions; rejects stale
-tails and duplicate IDs; and exposes complete immutable snapshots only after
-strict canonical event, sequence, identity, and digest validation. It remains
-standalone: it neither replaces JSON entity storage nor integrates with the
-pipeline, startup hydration, audit persistence, or world-state persistence.
+Durable Event Journal Pipeline Integration and Startup Hydration. An explicitly
+durable `AuditedCommandPipeline` now prepares one exact immutable sequenced
+batch, commits it once to the identity-checked SQLite authority, verifies the
+complete store result, appends those same entries to the process-local journal,
+and then projects state. Explicit all-or-nothing startup hydration reconstructs
+fresh synchronized journal and world-state views from an existing validated
+store and a caller-supplied sequence-zero base. Durable divergence and uncertain
+storage fail closed until fresh hydration; projection-only failure retains its
+existing explicit recovery path. Audit records, replay protection, and world
+state remain non-durable.
 
 
 
@@ -280,6 +282,23 @@ Projection Recovery and Rebuild was added.
 \- The complete deterministic pytest suite passes 455 tests after World State
 Projection Recovery and Rebuild was added.
 
+\- The Durable Event Journal Persistence Foundation baseline passes 481
+deterministic tests before integration work begins.
+
+\- Focused sequenced preparation, durable store identity, startup hydration,
+durable publication, restart, failure-ordering, concurrency, sanitization, and
+dependency coverage passes 107 tests.
+
+\- The complete focused engine suite passes 448 tests after Durable Event
+Journal Pipeline Integration and Startup Hydration was added.
+
+\- The complete deterministic pytest suite passes 522 tests with the live
+Ollama entry point excluded.
+
+\- The five isolated legacy smoke modules still pass through direct `python -m`
+execution using only temporary storage. Normal `data/` and `logs/` remain
+unchanged by path, size, UTC timestamp, and SHA-256.
+
 
 
 \## Implemented Functionality
@@ -500,6 +519,32 @@ successful recovery reaches the captured journal tail and clears out-of-sync
 health without dispatch, policy, approval, replay use, publication, audit
 records, retries, skips, or fallback
 
+\- Pure exact `GameEventJournal` batch preparation, atomic append of those same
+prepared entries, and fresh all-or-nothing construction from a validated
+immutable snapshot, with no active history replacement or mutation API
+
+\- A typed `DurableJournalBinding` that lets the pipeline depend on only the
+identity-aware append capability it needs while SQLite, SQL, filesystem paths,
+connections, and transactions remain inside `EventJournalStore`
+
+\- Durable-before-memory command publication with one expected-tail append,
+strict success metadata verification, exact entry-object preservation, no-event
+write avoidance, and no retry, regeneration, fallback, repair, or rollback
+
+\- Separate durable/local health and projection health: stale external writers,
+journal mismatch, unavailable or uncertain storage, and local synchronization
+failure require fresh hydration, while projection failure preserves the durable
+and local journal tail for explicit in-memory catch-up
+
+\- Immutable durable-publication metadata distinguishing no commit, complete
+synchronization, confirmed commit followed by local or projection failure,
+divergence, and storage unavailability with safe payload-free serialization
+
+\- Explicit `hydrate_durable_runtime()` loading an existing complete store,
+checking exact journal identity, constructing fresh journal and holder objects,
+replaying from an explicit sequence-zero base, and exposing a runtime bundle only
+after durable, local, and projected tails match
+
 
 
 \## Partially Implemented Functionality
@@ -519,10 +564,11 @@ model behavior remains nondeterministic and intentionally outside normal tests
 
 
 
-\- Durable Event Journal Pipeline Integration and Startup Hydration; the new
-SQLite store remains standalone and current pipeline publication, in-memory
-journal hydration, audit persistence, and world-state persistence remain out of
-scope
+\- First Playable Vertical Slice GDD Specification; gameplay specification and
+implementation have not started
+
+\- Durable command-audit storage, restart-safe replay protection, and
+world-state snapshot persistence remain future work
 
 \- Any later multi-step agent loop
 
@@ -537,7 +583,7 @@ work described in `PROJECT_PLAN.md`
 
 
 
-**Durable Event Journal Pipeline Integration and Startup Hydration**. It has
-not started; it must integrate the existing durable store deliberately without
-adding migrations, repair, retries, gameplay rules, UI, or Foundry integration.
+**First Playable Vertical Slice GDD Specification**. It has not started; no
+gameplay commands, events, reducers, dice, combat, D&D rules, UI, AI, voice, or
+Foundry integration were added by the durable journal milestone.
 
