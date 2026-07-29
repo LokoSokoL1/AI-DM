@@ -23,6 +23,8 @@
 - Research is the source of evidence.
 - The accepted GDD is authoritative for product philosophy and decisions.
 - Accepted vertical-slice specifications define bounded executable behaviour.
+- Accepted phase design specifications define approved product behavior and
+  acceptance criteria, not implemented functionality.
 - Architecture describes implemented technical structure and explicitly labelled future candidates.
 - Project Plan defines accepted sequence.
 - Project Status reports verified state.
@@ -44,6 +46,15 @@ Old attachments, conversation recollections, prompt drafts, and pasted snapshots
 
 - [GDD.md](GDD.md) — frozen core vision and general design philosophy. Together with the slice GDD, this is the complete current GDD.
 - [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md) — frozen executable vertical-slice behavior and seven-milestone sequence.
+- [LOW_FIDELITY_INTERFACE_SPEC_V1.md](docs/design/LOW_FIDELITY_INTERFACE_SPEC_V1.md)
+  — formally accepted Phase 2 low-fidelity interface design baseline. The
+  project owner accepted the exact draft with SHA-256
+  `21A77F35DC5606B49306F85691F55F17FCABDB71E374BBBA63F869739A640AA3`
+  on 2026-07-29. It approves product behavior and acceptance criteria, not
+  implementation; the interface and Foundry integration remain unimplemented,
+  and all ten explicitly deferred implementation decisions remain open. Future
+  technical design and implementation must conform to the baseline or record an
+  explicit revision.
 
 ## Canonical technical documentation
 
@@ -52,7 +63,7 @@ Old attachments, conversation recollections, prompt drafts, and pasted snapshots
 
 ## Planning and status documentation
 
-- [PROJECT_PLAN.md](PROJECT_PLAN.md) — accepted milestone order, completion state, and exact next milestone.
+- [PROJECT_PLAN.md](PROJECT_PLAN.md) — accepted milestone order, completion state, and exact next action.
 - [PROJECT_STATUS.md](PROJECT_STATUS.md) — verified behavior, coverage, tests, limitations, and checkpoint scope.
 
 ## Research documentation
@@ -82,6 +93,7 @@ Research observations do not become implementation claims until separately accep
 
 - [GDD.md](GDD.md)
 - [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md)
+- [LOW_FIDELITY_INTERFACE_SPEC_V1.md](docs/design/LOW_FIDELITY_INTERFACE_SPEC_V1.md)
 - [ARCHITECTURE.md](ARCHITECTURE.md)
 - [PROJECT_PLAN.md](PROJECT_PLAN.md)
 - [PROJECT_STATUS.md](PROJECT_STATUS.md)

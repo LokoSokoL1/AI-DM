@@ -10,10 +10,21 @@ The accepted seven-milestone First Playable Vertical Slice is complete and deter
 
 The final acceptance journeys prove both staged manual input and injected automatic dice through the real public composition boundaries. The original runtime graph is discarded before fresh hydration from the fixture files and SQLite journal alone; restart neither rerolls, dispatches, appends, repairs, narrates, nor replays gameplay. Narration stays transient and never becomes authoritative state. UI, Foundry, and voice remain outside this slice. No unstarted milestone remains in the frozen slice; a separate planning decision is required for later development.
 
+The [Phase 2 low-fidelity interface design baseline](docs/design/LOW_FIDELITY_INTERFACE_SPEC_V1.md)
+was formally accepted on 2026-07-29 from the exact draft with SHA-256
+`21A77F35DC5606B49306F85691F55F17FCABDB71E374BBBA63F869739A640AA3`.
+It approves product behavior and acceptance criteria, not implementation.
+The described interface and Foundry integration remain unimplemented, and its
+ten explicitly deferred implementation decisions remain open. The next step is
+a separate bounded Phase 2 technical-planning task; later technical design and
+implementation must conform to the accepted baseline or record an explicit
+revision.
+
 ## Documentation
 
 - [GDD.md](GDD.md) — master product vision and design philosophy.
 - [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md) — frozen executable behavior and seven-milestone slice sequence.
+- [LOW_FIDELITY_INTERFACE_SPEC_V1.md](docs/design/LOW_FIDELITY_INTERFACE_SPEC_V1.md) — formally accepted Phase 2 low-fidelity interface design baseline; not implemented.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — implemented technical boundaries, flows, ownership, and failure behavior.
 - [PROJECT_PLAN.md](PROJECT_PLAN.md) — accepted milestone order and current next step.
 - [PROJECT_STATUS.md](PROJECT_STATUS.md) — verified implementation and test status.

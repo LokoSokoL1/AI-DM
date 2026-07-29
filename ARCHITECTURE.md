@@ -6,6 +6,16 @@ This document describes the architecture implemented on develop through all seve
 
 Dungeon Manager is local first. The deterministic engine is authoritative for validated game actions and facts; AI components are clients, not state authorities; Foundry VTT is the intended presentation layer and is not implemented yet.
 
+The
+[Phase 2 low-fidelity interface design baseline](docs/design/LOW_FIDELITY_INTERFACE_SPEC_V1.md)
+was formally accepted on 2026-07-29 from source SHA-256
+`21A77F35DC5606B49306F85691F55F17FCABDB71E374BBBA63F869739A640AA3`.
+It approves future product behavior and acceptance criteria; it does not
+describe implemented architecture. The interface and Foundry integration remain
+unimplemented, and the specification's ten deferred implementation decisions
+remain open. Future technical design and implementation must conform to this
+baseline or record an explicit revision.
+
 [RI-001](docs/research/RI-001.md) provides evidence for several present boundaries and future candidate systems. Implemented architecture remains defined by the actual code and verified tests; research-derived candidates are not implemented merely because they appear in RI-001.
 
 ## Implemented dependency direction
@@ -204,8 +214,9 @@ Foundry, or voice.
 ## Future architecture
 
 All seven frozen slice milestones are complete. No unstarted milestone remains in
-this slice; a separately planned next development phase would be required before
-work resumes. General narration, narration persistence or replay, semantic
+this slice. The accepted Phase 2 interface baseline now constrains future work,
+but a separate bounded technical-planning task is required before implementation
+begins. General narration, narration persistence or replay, semantic
 fact-checking of arbitrary prose, general rules, goblin tactics, Foundry
 integration, UI, voice, durable audit, restart-safe replay protection, snapshots,
 migration/repair, background work, and cross-process coordination remain future

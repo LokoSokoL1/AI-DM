@@ -2,7 +2,7 @@
 
 ## Planning authority
 
-The accepted product sequence is defined by [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md). This plan reports progress against that sequence; it does not redefine product behavior.
+The accepted product sequence is defined by [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md). The accepted Phase 2 interface behavior is defined by [LOW_FIDELITY_INTERFACE_SPEC_V1.md](docs/design/LOW_FIDELITY_INTERFACE_SPEC_V1.md). This plan reports progress and next planning work; it does not redefine product behavior.
 
 ## First Playable Vertical Slice
 
@@ -29,15 +29,33 @@ The accepted product sequence is defined by [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V
    automatic dice through selection, one durable controlled round, projection,
    verified transient narration, shutdown, and fresh durable hydration.
 
+## Phase 2 interface design baseline
+
+The Phase 2 low-fidelity interface design baseline was formally accepted on
+2026-07-29 from the exact draft with SHA-256
+`21A77F35DC5606B49306F85691F55F17FCABDB71E374BBBA63F869739A640AA3`.
+Acceptance approves its product behavior and 42 acceptance criteria; it does not
+implement the interface or Foundry integration. Its ten explicitly deferred
+implementation decisions remain open. Future technical design and implementation
+must conform to the baseline or record an explicit revision.
+
 ## Current boundary
 
 All seven accepted slice milestones are complete. There is no unstarted
-milestone in this frozen slice; later development requires separate planning.
-The completed acceptance proof does not persist or replay narration or make
-audit and replay safeguards durable.
+milestone in this frozen slice. The Phase 2 design baseline is accepted, but no
+Phase 2 implementation milestone has been accepted or started. The next action
+is a separate bounded Phase 2 technical-planning task that defines implementation
+sequence and resolves deferred mechanisms only through explicit decisions. The
+completed acceptance proof does not persist or replay narration or make audit
+and replay safeguards durable.
 
 General D&D rules, goblin tactics, movement, spellcasting, Foundry control, UI, voice, campaign discovery, editors, migrations, repair, background work, and cross-process coordination remain outside the completed slice scope unless explicitly scheduled.
 
 ## Later roadmap
 
-After the frozen slice is validated end to end, later planning may address broader rules coverage, richer campaign/world systems, Foundry VTT presentation and control, management interfaces, additional local providers, voice interaction, and advanced automation. Those items are future directions, not current implementation commitments.
+With the frozen slice validated and the Phase 2 low-fidelity interface baseline
+accepted, the next bounded technical-planning task may schedule conforming
+Foundry VTT presentation and control, management interfaces, and supporting
+systems. Broader rules coverage, richer campaign/world systems, additional local
+providers, voice interaction, and advanced automation remain future directions,
+not current implementation commitments.
