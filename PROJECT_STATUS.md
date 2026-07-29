@@ -7,13 +7,13 @@
 - Completed slice milestone: **Milestone 7 — End-to-End First Playable Validation**
 - Accepted Phase 2 design source: SHA-256 `21A77F35DC5606B49306F85691F55F17FCABDB71E374BBBA63F869739A640AA3` on 2026-07-29
 - Accepted Phase 2 decisions on 2026-07-29: **D6 — Core/client API/adapter/permission/save/sync boundaries** and **D10 — Implementation sequencing**
-- Approved next milestone: **M1 — Client-Neutral Authority and Operation Contracts — unstarted**
-- Next action: the bounded M1 implementation task, after this documentation checkpoint is committed and the checkout is clean
+- Completed Phase 2 milestone: **M1 — Client-Neutral Authority and Operation Contracts**
+- Provisional following milestone: **M2 — Identity, Permission, Assignment and Visibility Core — unstarted**
 
 The headless engine-level first playable is complete. The Phase 2 interface
 design baseline is accepted, but the described UI and Foundry integration remain
-unimplemented. M1 code and tests have not been produced. Voice also remains
-outside this checkpoint.
+unimplemented. M1 is implemented and verified within its minimum-contract
+constraint. Voice also remains outside this checkpoint.
 
 ## Accepted Phase 2 design baseline
 
@@ -36,7 +36,7 @@ explicit revision.
 - D10 accepts a contract-first bounded implementation sequence. Later milestone
   ordering is not permanently frozen and may change only through an explicit
   accepted decision.
-- M1 is approved but unstarted. Its binding scope is only the minimum
+- M1 is completed and verified. Its binding scope remains only the minimum
   client-neutral authority and operation contracts needed to represent the
   existing controlled fixture and support the next bounded milestones.
 - M1 must not prematurely finalize detailed contracts or behavior belonging to
@@ -45,8 +45,8 @@ explicit revision.
 - M2 — Identity, Permission, Assignment and Visibility Core — is only the
   provisional following milestone.
 
-This documentation checkpoint implements no Phase 2 capability. No M1 source
-code or tests exist yet.
+The other eight deferred implementation decisions remain open. M2 remains only
+the provisional following milestone and has not started.
 
 ## Implemented behavior
 
@@ -65,6 +65,39 @@ code or tests exist yet.
 - Per-capability automation policy, optional human approval, fail-closed gate resolution, and a policy-gated dispatcher with process-local replay protection.
 - Audited command coordination, atomic event batches, append-only in-memory event and audit journals, world-state projection, synchronization health, and explicit recovery/rebuild.
 - Identity-checked SQLite EventJournalStore with durable-before-memory publication and all-or-nothing startup hydration into fresh in-memory journal and projection objects.
+
+### Phase 2 M1 — Client-Neutral Authority and Operation Contracts
+
+- Standard-library-only immutable contracts for typed campaign, scene, actor,
+  command, event, and caller-operation references; exact contract version;
+  controlled capability descriptors; selection, round, and reconstruction
+  requests; fixture inspection; sanitized diagnostics; transient presentation;
+  and stage-separated operation views.
+- One `ControlledFixtureAuthorityPort` and `ControlledFixtureFacade` that depend
+  only on client-neutral contracts. Unknown versions, identity kinds,
+  capability keys, and operation states fail closed.
+- One `InProcessControlledFixtureAdapter` over the existing controlled fixture.
+  It maps selection and round results without replacing engine decisions or
+  changing command gating, dice, durable-before-local publication, projection,
+  synchronization, narration eligibility, or restart behavior.
+- Side-effect-free inspection and capability discovery. The bounded capability
+  set explicitly reports supported, unsupported, and currently unavailable
+  states without composing combat or invoking files, commands, dice, providers,
+  tools, or mutation paths.
+- Caller-supplied operation correlation remains distinct from command and event
+  identity. A fresh hydrated façade may correlate that caller reference with an
+  existing authoritative command's durable events without reroll, dispatch,
+  append, tool/provider execution, repair, or a durable outcome ledger.
+- Operation views keep accepted/rejected/unknown submission, mechanical
+  success/input-required/failure, durable commitment, process-local
+  publication, projection, synchronization, and optional transient
+  presentation independent. Fixed diagnostics expose no raw exception,
+  traceback, credential, prompt, hidden payload, storage path, or provider
+  detail.
+- Dependency guards prevent the contract/application layer from importing
+  Foundry, D&D 5e, UI, transport, providers, ToolAgent, tools, legacy managers,
+  persistence, or concrete runtimes. The engine remains independent of both the
+  application and adapter layers.
 
 ### First Playable Vertical Slice Milestones 1–7
 
@@ -95,10 +128,15 @@ All seven milestones of the accepted vertical slice are implemented and verified
 
 ## Verification
 
+- Focused Phase 2 M1 contracts, façade, adapter, journeys, reconstruction,
+  diagnostics, and dependency tests: **54 passed**.
+- Directly affected command, policy, pipeline, projection, persistence,
+  runtime, restart, narration, acceptance, application, and dependency tests:
+  **354 passed**.
 - Focused Milestone 7 end-to-end first-playable acceptance: **2 passed**.
 - Directly affected runtime, controlled-round, journal, projection, hydration, narration, pipeline, and dependency suite: **188 passed**.
-- Complete engine suite: **537 passed**.
-- Complete deterministic pytest suite: **609 passed**, with dungeon_manager/ai/test_live_tool_loop_validation.py explicitly excluded.
+- Complete engine suite: **540 passed**.
+- Complete deterministic pytest suite: **644 passed**, with dungeon_manager/ai/test_live_tool_loop_validation.py explicitly excluded.
 - Five isolated legacy smoke modules: **passed** for models, storage, managers, tools, and registry.
 - Normal data/ and logs/ manifest: **unchanged** by path, type, size, UTC modification timestamp, and SHA-256.
 - Live validator, Ollama, and all external AI providers: **not invoked**.
@@ -110,8 +148,8 @@ The two deterministic guard tests stored in dungeon_manager/ai/test_live_tool_lo
 - Narration is implemented only for the single verified controlled-round event. It does not provide semantic proof of unrestricted provider prose, general event narration, persistence, streaming, retry, fallback, or automatic replay after restart.
 - ToolAgent and tools are not part of the narration path and remain disconnected from controlled combat.
 - Process-local audit history, replay guards, provider history, narration text, and Python object identity do not survive restart; no new persistence mechanism was added for them.
-- All seven frozen slice milestones are complete; M1 is approved as the next
-  bounded Phase 2 milestone but remains unstarted.
+- All seven frozen slice milestones and Phase 2 M1 are complete. M2 remains a
+  provisional following milestone and is unstarted.
 - The slice is one fixed campaign, one selectable player character, one hostile goblin, one permitted rapier attack, and one aggregate controlled-round event.
 - Goblin tactical behavior is deliberately absent; the goblin-first path records only the accepted no-action advancement.
 - Foundry VTT integration, UI, voice, general D&D rules, movement, spells, campaign discovery, editors, and broader content systems are not implemented.
@@ -122,6 +160,6 @@ The two deterministic guard tests stored in dungeon_manager/ai/test_live_tool_lo
 ## Next action
 
 No unstarted milestone remains in the frozen seven-milestone slice. After this
-documentation checkpoint is committed and the checkout is clean, the next
-bounded task is M1 — Client-Neutral Authority and Operation Contracts. M1
-remains unstarted, and its minimum-contract constraint remains binding.
+verified M1 implementation, M2 — Identity, Permission, Assignment and
+Visibility Core — is only the provisional following milestone. It has not
+started and requires an explicit accepted bounded task before implementation.

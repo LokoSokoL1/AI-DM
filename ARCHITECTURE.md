@@ -2,7 +2,10 @@
 
 ## Status and scope
 
-This document describes the architecture implemented on develop through all seven First Playable Vertical Slice milestones. Future work is labelled explicitly. The frozen product behavior is in [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md).
+This document describes the architecture implemented on develop through all
+seven First Playable Vertical Slice milestones and Phase 2 M1. Future work is
+labelled explicitly. The frozen product behavior is in
+[FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md).
 
 Dungeon Manager is local first. The deterministic engine is authoritative for validated game actions and facts; AI components are clients, not state authorities; Foundry VTT is the intended presentation layer and is not implemented yet.
 
@@ -35,17 +38,73 @@ accepted ports-and-adapters ownership direction for future Phase 2 work:
 - AI components remain non-authoritative clients.
 
 D10 — Implementation sequencing — establishes a contract-first bounded Phase 2
-order. The approved but unstarted M1 — Client-Neutral Authority and Operation
-Contracts — may introduce only the minimum client-neutral authority and
-operation contracts needed to represent the existing controlled fixture and
-support the immediate bounded milestones. M1 must not prematurely finalize
-detailed contracts or behavior belonging to later permission, transport,
-Foundry, multiplayer, save, branch, snapshot, or reconciliation milestones.
-The later milestone sequence remains revisable only through an explicitly
-accepted decision.
+order. M1 — Client-Neutral Authority and Operation Contracts — introduced only
+the minimum client-neutral authority and operation contracts needed to
+represent the existing controlled fixture and support the immediate bounded
+milestones. It did not finalize detailed contracts or behavior belonging to
+later permission, transport, Foundry, multiplayer, save, branch, snapshot, or
+reconciliation milestones. The later milestone sequence remains revisable only
+through an explicitly accepted decision.
 
-This section records direction, not implemented Phase 2 components. The other
-eight deferred implementation decisions remain open.
+The other eight deferred implementation decisions remain open.
+
+## Phase 2 M1 client-neutral application boundary
+
+M1 adds a narrow ports-and-adapters boundary without changing engine authority:
+
+    client-neutral caller
+      -> ControlledFixtureFacade
+      -> ControlledFixtureAuthorityPort
+      -> InProcessControlledFixtureAdapter
+      -> existing campaign and controlled-round runtimes
+      -> existing deterministic engine and durable publication pipeline
+
+`dungeon_manager.application.contracts` owns standard-library-only immutable
+client contracts:
+
+- `AuthorityReference` plus `IdentityKind` distinguish campaign, scene, actor,
+  command, event, and caller-operation identities.
+- `ControlledFixtureView` reports the exact controlled campaign, scene, actors,
+  selectable and selected character, complete event-reference tail, projection
+  sequence, synchronization state, and controlled-round completion state.
+- `CapabilityDescriptor` reports supported, unsupported, or currently
+  unavailable controlled-fixture capabilities. Unknown versions, identity
+  kinds, capability keys, and operation-state values fail closed.
+- `SelectPlayerCharacterRequest`, `ResolveControlledRoundRequest`, and
+  `OperationCorrelationRequest` carry only the inputs required by the existing
+  fixture. Caller operation correlation remains distinct from authoritative
+  command and event identity.
+- `OperationView` independently reports submission, mechanical resolution,
+  durable commitment, process-local publication, projection, synchronization,
+  and optional transient presentation. `ClientDiagnostic` exposes only fixed
+  sanitized codes and messages.
+
+`ControlledFixtureFacade` performs version/type checks, capability discovery,
+and sanitized fail-closed coordination against the narrow
+`ControlledFixtureAuthorityPort`. Inspection and capability discovery read only
+the already composed process-local runtime and do not compose combat, dispatch,
+roll dice, append events, invoke providers, or mutate state.
+
+`InProcessControlledFixtureAdapter` is the sole M1 concrete adapter. It maps
+the existing controlled selection and round results into the client-neutral
+views, lazily composes only the existing controlled combat path when a round is
+submitted, and optionally invokes the existing verified narration boundary
+only after synchronized mechanical success. It does not change fixture
+validation, command gating, dice behavior, durable-before-local ordering,
+projection, restart hydration, or narration eligibility.
+
+Operation reconstruction accepts a caller-supplied operation reference and
+authoritative command reference, then correlates them with existing durable
+event facts in a freshly hydrated runtime. The caller operation reference is
+not persisted as authority, is not an authorization credential, and provides
+no durable cross-process request/outcome deduplication guarantee. No general
+outcome ledger was added.
+
+The application contract, port, and façade modules do not import concrete
+runtimes, persistence, providers, tools, legacy managers, Foundry, D&D 5e, UI,
+or transport code. The adapter depends inward on those client-neutral
+contracts and on the existing fixture composition paths. The authoritative
+engine imports neither the application nor adapter layer.
 
 ## Implemented dependency direction
 
@@ -237,15 +296,19 @@ Foundry, or voice.
 - Current derived state: process-local WorldStateHolder, reconstructed from the journal.
 - Command audit history: process-local CommandAuditJournal; it is not restart reconstructed.
 - Command replay protection: process-local dispatcher state; it is not restart persistent.
+- Caller operation correlation: supplied by the client and returned in M1
+  operation views; it is not authoritative state or durable deduplication.
 - Verified narration and tool observations: transient presentation data, never authoritative game state unless a future separately accepted owner is introduced.
 - Foundry state: no implemented ownership or synchronization path.
 
 ## Future architecture
 
 All seven frozen slice milestones are complete. No unstarted milestone remains in
-this slice. The accepted Phase 2 interface baseline plus D6 and D10 now constrain
-future work. M1 is approved as the next bounded milestone but remains unstarted.
-General narration, narration persistence or replay, semantic fact-checking of
-arbitrary prose, general rules, goblin tactics, Foundry integration, UI, voice,
-durable audit, restart-safe replay protection, snapshots, migration/repair,
-background work, and cross-process coordination remain future work.
+this slice. The accepted Phase 2 interface baseline plus D6 and D10 constrain
+future work. M1 is implemented and verified. M2 — Identity, Permission,
+Assignment and Visibility Core — is only the provisional following milestone
+and has not started. General narration, narration persistence or replay,
+semantic fact-checking of arbitrary prose, general rules, goblin tactics,
+Foundry integration, UI, voice, durable audit, restart-safe replay protection,
+snapshots, migration/repair, background work, and cross-process coordination
+remain future work.

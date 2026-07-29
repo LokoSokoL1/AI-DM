@@ -52,30 +52,34 @@ explicit revision.
   Phase 2 proceeds contract-first through bounded milestones. Accepting D10 does
   not permanently freeze the later sequence; any revision requires an explicit
   accepted decision.
-- **M1 — Client-Neutral Authority and Operation Contracts — approved next,
-  unstarted.**
-  M1 will establish only the minimum client-neutral authority and operation
+- **M1 — Client-Neutral Authority and Operation Contracts — completed and
+  verified.**
+  M1 establishes only the minimum client-neutral authority and operation
   contracts needed to represent the existing controlled fixture and support the
-  next bounded milestones. It must not prematurely finalize detailed contracts
-  or behavior belonging to later permission, transport, Foundry, multiplayer,
-  save, branch, snapshot, or reconciliation milestones.
+  next bounded milestones. It keeps submission, mechanics, durable commitment,
+  local publication, projection, synchronization, and transient presentation
+  distinct; carries caller operation correlation separately from command/event
+  identity; and exposes the fixture through one in-process headless façade.
+  It does not finalize detailed contracts or behavior belonging to later
+  permission, transport, Foundry, multiplayer, save, branch, snapshot, or
+  reconciliation milestones.
 - **M2 — Identity, Permission, Assignment and Visibility Core — provisional
   following milestone only.**
   M2 is not approved for implementation by this checkpoint and may be revised
   through an explicit accepted decision.
 
-The other eight deferred implementation decisions remain open. No Phase 2
-implementation is recorded by this documentation checkpoint.
+The other eight deferred implementation decisions remain open.
 
 ## Current boundary
 
 All seven accepted slice milestones are complete. There is no unstarted
 milestone in this frozen slice. The Phase 2 design baseline, D6, and D10 are
-accepted. M1 is approved as the next Phase 2 milestone but remains unstarted.
-The next action, after this documentation checkpoint is committed and the
-checkout is clean, is the bounded M1 implementation task. The completed
-acceptance proof does not persist or replay narration or make audit and replay
-safeguards durable.
+accepted. M1 is completed and verified within its minimum-contract constraint.
+M2 is only the provisional following milestone and has not started. The
+completed slice and M1 do not persist or replay narration, make audit and replay
+safeguards durable, or implement permissions, transport, Foundry, multiplayer,
+saves, branches, snapshots, restoration, synchronization adapters, or
+reconciliation.
 
 General D&D rules, goblin tactics, movement, spellcasting, Foundry control, UI, voice, campaign discovery, editors, migrations, repair, background work, and cross-process coordination remain outside the completed slice scope unless explicitly scheduled.
 
@@ -83,8 +87,8 @@ General D&D rules, goblin tactics, movement, spellcasting, Foundry control, UI, 
 
 With the frozen slice validated and the Phase 2 low-fidelity interface baseline
 accepted, D6 and D10 define the accepted ownership direction and bounded
-contract-first starting sequence. M1 is the approved next milestone; M2 is only
-the provisional following milestone. Broader rules coverage, richer
-campaign/world systems, additional local providers, voice interaction, and
-advanced automation remain future directions, not current implementation
-commitments.
+contract-first sequence. M1 is completed; M2 is only the provisional following
+milestone and requires a separately accepted bounded implementation task before
+it starts. Broader rules coverage, richer campaign/world systems, additional
+local providers, voice interaction, and advanced automation remain future
+directions, not current implementation commitments.

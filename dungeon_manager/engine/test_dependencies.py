@@ -474,3 +474,117 @@ def test_world_state_recovery_result_depends_only_on_safe_data_boundaries():
     assert "GameEventJournal" not in accessed_names
     assert "CommandAuditJournal" not in accessed_names
     assert "PolicyGatedCommandDispatcher" not in accessed_names
+
+
+def test_client_neutral_contract_and_application_layers_point_inward_only():
+    package_root = Path(__file__).resolve().parent.parent
+    application_root = package_root / "application"
+    expected_relative_imports = {
+        "contracts.py": set(),
+        "ports.py": {"contracts"},
+        "controlled_fixture.py": {"contracts", "ports"},
+    }
+    forbidden_names = {
+        "CampaignRuntime",
+        "ControlledRoundRuntime",
+        "EventJournalStore",
+        "Foundry",
+        "JSONStorage",
+        "NarrationProvider",
+        "ToolAgent",
+        "ToolExecutor",
+        "ToolRegistry",
+    }
+
+    for filename, expected in expected_relative_imports.items():
+        path = application_root / filename
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+        relative_imports = {
+            node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.level > 0
+        }
+        absolute_modules = {
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        } | {
+            node.module or ""
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.level == 0
+        }
+        accessed_names = {
+            node.id for node in ast.walk(tree) if isinstance(node, ast.Name)
+        }
+
+        assert relative_imports == expected
+        assert all(
+            module.split(".", 1)[0] in sys.stdlib_module_names
+            for module in absolute_modules
+        )
+        assert not (accessed_names & forbidden_names)
+        assert "Integrate AI" not in source
+
+
+def test_in_process_controlled_fixture_adapter_has_no_edge_client_or_ai_tools():
+    path = (
+        Path(__file__).resolve().parent.parent
+        / "adapters"
+        / "in_process_controlled_fixture.py"
+    )
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+    absolute_modules = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {
+        node.module or ""
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level == 0
+    }
+    forbidden_prefixes = (
+        "dungeon_manager.ai",
+        "dungeon_manager.foundry",
+        "dungeon_manager.managers",
+        "dungeon_manager.storage",
+        "dungeon_manager.tools",
+        "dungeon_manager.ui",
+    )
+
+    assert not any(
+        module.startswith(forbidden_prefixes) for module in absolute_modules
+    )
+    assert "sqlite3" not in absolute_modules
+    assert "Integrate AI" not in source
+
+
+def test_authoritative_engine_never_imports_application_or_adapter_layers():
+    package_root = Path(__file__).resolve().parent
+
+    for path in sorted(package_root.glob("*.py")):
+        if path.name.startswith("test_"):
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        absolute_modules = {
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        } | {
+            node.module or ""
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.level == 0
+        }
+        assert not any(
+            module.startswith(
+                (
+                    "dungeon_manager.application",
+                    "dungeon_manager.adapters",
+                )
+            )
+            for module in absolute_modules
+        )
