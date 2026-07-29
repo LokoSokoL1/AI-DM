@@ -37,7 +37,7 @@ The Phase 2 low-fidelity interface design baseline was formally accepted on
 Acceptance approves its product behavior and 42 acceptance criteria; it does not
 implement the interface or Foundry integration. On 2026-07-29, the project owner
 accepted D6 and D10 from its ten explicitly deferred implementation decisions.
-The remaining eight decisions remain open. Future technical design and
+The remaining decisions D1–D5 and D7–D9 remain open. Future technical design and
 implementation must conform to the baseline and accepted decisions or record an
 explicit revision.
 
@@ -63,23 +63,38 @@ explicit revision.
   It does not finalize detailed contracts or behavior belonging to later
   permission, transport, Foundry, multiplayer, save, branch, snapshot, or
   reconciliation milestones.
-- **M2 — Identity, Permission, Assignment and Visibility Core — provisional
-  following milestone only.**
-  M2 is not approved for implementation by this checkpoint and may be revised
-  through an explicit accepted decision.
+- **M2 — Identity, Permission, Assignment and Visibility Core — approved next
+  bounded milestone, unstarted.**
+  The project owner accepted the bounded scope on 2026-07-29. Its binding scope
+  is defined by
+  [PHASE_2_M2_SCOPE_PROPOSAL.md](PHASE_2_M2_SCOPE_PROPOSAL.md). M2 will add a
+  client-neutral, fail-closed authorization core around the M1
+  controlled-fixture boundary. Session identity, participant role, speaker
+  mode, controlled actor, assignment, Speak-as grant, Act-as grant, viewing
+  perspective, and visibility audience remain distinct. Client-supplied labels
+  never prove authority.
+  Authentication, pairing, transport, Foundry, multiplayer, durable permission
+  persistence, saves, snapshots, and reconciliation remain unimplemented and
+  undecided where previously open. D1–D5 and D7–D9 remain open. M2 must stop
+  rather than select one of those decisions if implementation requires it. No
+  M2 implementation capability is claimed.
 
-The other eight deferred implementation decisions remain open.
+The other eight deferred implementation decisions, D1–D5 and D7–D9, remain
+open.
 
 ## Current boundary
 
 All seven accepted slice milestones are complete. There is no unstarted
 milestone in this frozen slice. The Phase 2 design baseline, D6, and D10 are
 accepted. M1 is completed and verified within its minimum-contract constraint.
-M2 is only the provisional following milestone and has not started. The
+M2 is the approved next bounded milestone and has not started. Its accepted
+scope and final implementation task are recorded in
+[PHASE_2_M2_SCOPE_PROPOSAL.md](PHASE_2_M2_SCOPE_PROPOSAL.md) and
+[PHASE_2_M2_IMPLEMENTATION_TASK.md](PHASE_2_M2_IMPLEMENTATION_TASK.md). The
 completed slice and M1 do not persist or replay narration, make audit and replay
-safeguards durable, or implement permissions, transport, Foundry, multiplayer,
-saves, branches, snapshots, restoration, synchronization adapters, or
-reconciliation.
+safeguards durable, or implement M2 permissions, transport, Foundry,
+multiplayer, saves, branches, snapshots, restoration, synchronization adapters,
+or reconciliation.
 
 General D&D rules, goblin tactics, movement, spellcasting, Foundry control, UI, voice, campaign discovery, editors, migrations, repair, background work, and cross-process coordination remain outside the completed slice scope unless explicitly scheduled.
 
@@ -87,8 +102,10 @@ General D&D rules, goblin tactics, movement, spellcasting, Foundry control, UI, 
 
 With the frozen slice validated and the Phase 2 low-fidelity interface baseline
 accepted, D6 and D10 define the accepted ownership direction and bounded
-contract-first sequence. M1 is completed; M2 is only the provisional following
-milestone and requires a separately accepted bounded implementation task before
-it starts. Broader rules coverage, richer campaign/world systems, additional
-local providers, voice interaction, and advanced automation remain future
-directions, not current implementation commitments.
+contract-first sequence. M1 is completed; M2 is the approved next bounded
+milestone and remains unstarted. Its final implementation task may begin only
+after this acceptance checkpoint is committed, pushed, synchronized, and clean,
+and it must stop if implementation requires D1–D5 or D7–D9. Broader rules
+coverage, richer campaign/world systems, additional local providers, voice
+interaction, and advanced automation remain future directions, not current
+implementation commitments.

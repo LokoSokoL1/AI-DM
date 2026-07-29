@@ -3,17 +3,19 @@
 ## Checkpoint
 
 - Branch: develop
-- Checkpoint scope: the completed seven-milestone First Playable Vertical Slice, plus the formally accepted Phase 2 low-fidelity interface design baseline and canonical documentation
+- Checkpoint scope: the completed seven-milestone First Playable Vertical Slice, the formally accepted Phase 2 low-fidelity interface design baseline, completed Phase 2 M1, and the accepted but unstarted Phase 2 M2 scope and task
 - Completed slice milestone: **Milestone 7 — End-to-End First Playable Validation**
 - Accepted Phase 2 design source: SHA-256 `21A77F35DC5606B49306F85691F55F17FCABDB71E374BBBA63F869739A640AA3` on 2026-07-29
 - Accepted Phase 2 decisions on 2026-07-29: **D6 — Core/client API/adapter/permission/save/sync boundaries** and **D10 — Implementation sequencing**
 - Completed Phase 2 milestone: **M1 — Client-Neutral Authority and Operation Contracts**
-- Provisional following milestone: **M2 — Identity, Permission, Assignment and Visibility Core — unstarted**
+- Approved next bounded milestone: **M2 — Identity, Permission, Assignment and Visibility Core — unstarted**
 
 The headless engine-level first playable is complete. The Phase 2 interface
 design baseline is accepted, but the described UI and Foundry integration remain
 unimplemented. M1 is implemented and verified within its minimum-contract
-constraint. Voice also remains outside this checkpoint.
+constraint. The project owner accepted the bounded M2 scope on 2026-07-29, but
+no M2 source code or tests have been produced. Voice also remains outside this
+checkpoint.
 
 ## Accepted Phase 2 design baseline
 
@@ -23,9 +25,9 @@ project owner accepted the exact draft on 2026-07-29 with SHA-256
 `21A77F35DC5606B49306F85691F55F17FCABDB71E374BBBA63F869739A640AA3`.
 Acceptance approves its product behavior and 42 acceptance criteria, not
 implementation. D6 and D10 were accepted on 2026-07-29; the remaining eight
-deferred implementation decisions remain open. Future technical design and
-implementation must conform to the baseline and accepted decisions or record an
-explicit revision.
+deferred implementation decisions, D1–D5 and D7–D9, remain open. Future
+technical design and implementation must conform to the baseline and accepted
+decisions or record an explicit revision.
 
 ## Accepted Phase 2 decision state
 
@@ -42,11 +44,25 @@ explicit revision.
 - M1 must not prematurely finalize detailed contracts or behavior belonging to
   later permission, transport, Foundry, multiplayer, save, branch, snapshot, or
   reconciliation milestones.
-- M2 — Identity, Permission, Assignment and Visibility Core — is only the
-  provisional following milestone.
+- The project owner accepted the bounded scope of M2 — Identity, Permission,
+  Assignment and Visibility Core — on 2026-07-29. M2 is the approved next
+  bounded milestone and remains unstarted.
+- [PHASE_2_M2_SCOPE_PROPOSAL.md](PHASE_2_M2_SCOPE_PROPOSAL.md) and
+  [PHASE_2_M2_IMPLEMENTATION_TASK.md](PHASE_2_M2_IMPLEMENTATION_TASK.md) are the
+  accepted scope and final next-step records.
+- M2 will add a client-neutral, fail-closed authorization core around the M1
+  controlled-fixture boundary while keeping session identity, participant role,
+  speaker mode, controlled actor, assignment, Speak-as grant, Act-as grant,
+  viewing perspective, and visibility audience distinct. Client-supplied labels
+  never prove authority.
+- Authentication, pairing, transport, Foundry, multiplayer, durable permission
+  persistence, saves, snapshots, and reconciliation remain unimplemented and
+  undecided where previously open. All M2 exclusions remain binding.
+- If M2 implementation requires D1–D5 or D7–D9, it must stop rather than select
+  one of those decisions.
 
-The other eight deferred implementation decisions remain open. M2 remains only
-the provisional following milestone and has not started.
+The other eight deferred implementation decisions, D1–D5 and D7–D9, remain
+open. M2 is approved but has not started, and no M2 source code or tests exist.
 
 ## Implemented behavior
 
@@ -148,8 +164,8 @@ The two deterministic guard tests stored in dungeon_manager/ai/test_live_tool_lo
 - Narration is implemented only for the single verified controlled-round event. It does not provide semantic proof of unrestricted provider prose, general event narration, persistence, streaming, retry, fallback, or automatic replay after restart.
 - ToolAgent and tools are not part of the narration path and remain disconnected from controlled combat.
 - Process-local audit history, replay guards, provider history, narration text, and Python object identity do not survive restart; no new persistence mechanism was added for them.
-- All seven frozen slice milestones and Phase 2 M1 are complete. M2 remains a
-  provisional following milestone and is unstarted.
+- All seven frozen slice milestones and Phase 2 M1 are complete. M2 is the
+  approved next bounded milestone and remains unstarted.
 - The slice is one fixed campaign, one selectable player character, one hostile goblin, one permitted rapier attack, and one aggregate controlled-round event.
 - Goblin tactical behavior is deliberately absent; the goblin-first path records only the accepted no-action advancement.
 - Foundry VTT integration, UI, voice, general D&D rules, movement, spells, campaign discovery, editors, and broader content systems are not implemented.
@@ -160,6 +176,9 @@ The two deterministic guard tests stored in dungeon_manager/ai/test_live_tool_lo
 ## Next action
 
 No unstarted milestone remains in the frozen seven-milestone slice. After this
-verified M1 implementation, M2 — Identity, Permission, Assignment and
-Visibility Core — is only the provisional following milestone. It has not
-started and requires an explicit accepted bounded task before implementation.
+clean documentation checkpoint is committed, pushed, synchronized, and the
+checkout is clean, the next action is the bounded
+[Phase 2 M2 implementation task](PHASE_2_M2_IMPLEMENTATION_TASK.md). M2 —
+Identity, Permission, Assignment and Visibility Core — is approved but
+unstarted. All exclusions and the stop condition for D1–D5 and D7–D9 remain
+binding.

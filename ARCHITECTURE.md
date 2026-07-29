@@ -18,8 +18,10 @@ describe implemented architecture. The interface and Foundry integration remain
 unimplemented. On 2026-07-29, the project owner accepted D6's
 ports-and-adapters ownership direction and D10's contract-first bounded Phase 2
 implementation sequence. The other eight deferred implementation decisions
-remain open. Future technical design and implementation must conform to this
-baseline and the accepted decisions or record an explicit revision.
+remain open as D1–D5 and D7–D9. The project owner also accepted the bounded M2
+architectural direction on 2026-07-29; it remains unimplemented. Future
+technical design and implementation must conform to this baseline and the
+accepted decisions or record an explicit revision.
 
 [RI-001](docs/research/RI-001.md) provides evidence for several present boundaries and future candidate systems. Implemented architecture remains defined by the actual code and verified tests; research-derived candidates are not implemented merely because they appear in RI-001.
 
@@ -46,7 +48,35 @@ later permission, transport, Foundry, multiplayer, save, branch, snapshot, or
 reconciliation milestones. The later milestone sequence remains revisable only
 through an explicitly accepted decision.
 
-The other eight deferred implementation decisions remain open.
+### Phase 2 M2 accepted future direction
+
+M2 — Identity, Permission, Assignment and Visibility Core — is accepted as the
+next bounded milestone but is not implemented. Its permissioned coordinator
+will wrap the existing M1 authority-facing façade, evaluate authorization before
+delegation, and preserve M1 as the path to authoritative mechanics and outcomes.
+
+Identity resolution will be trusted and injected through a client-neutral port.
+This direction does not implement authentication, credential issuance,
+verification, storage, pairing, or transport. Session identity, participant
+role, speaker mode, controlled actor, actor assignment, Speak-as grant, Act-as
+grant, viewing perspective, and visibility audience remain separate concepts;
+client-supplied labels never establish authority.
+
+Permission evaluation will be exact, typed, deterministic, side-effect-free,
+and fail-closed. Objective world state will remain separate from
+permission-filtered participant views, and filtering will use explicit
+visibility audiences rather than prose, UI state, speaker selection, or AI
+interpretation. Deterministic process-local permission and assignment state may
+support the bounded controlled fixture without claiming durable permission
+persistence.
+
+The deterministic engine remains mechanical authority, durable committed event
+history remains world-fact authority, and AI remains non-authoritative. M2 does
+not select D1–D5 or D7–D9 and must stop if implementation requires one of those
+open decisions.
+
+The other eight deferred implementation decisions, D1–D5 and D7–D9, remain
+open.
 
 ## Phase 2 M1 client-neutral application boundary
 
@@ -306,9 +336,10 @@ Foundry, or voice.
 All seven frozen slice milestones are complete. No unstarted milestone remains in
 this slice. The accepted Phase 2 interface baseline plus D6 and D10 constrain
 future work. M1 is implemented and verified. M2 — Identity, Permission,
-Assignment and Visibility Core — is only the provisional following milestone
-and has not started. General narration, narration persistence or replay,
+Assignment and Visibility Core — is the approved next bounded milestone and has
+not started; its accepted architectural direction is described above, not as
+implemented behavior. General narration, narration persistence or replay,
 semantic fact-checking of arbitrary prose, general rules, goblin tactics,
-Foundry integration, UI, voice, durable audit, restart-safe replay protection,
-snapshots, migration/repair, background work, and cross-process coordination
-remain future work.
+Foundry integration, UI, voice, durable permission persistence, durable audit,
+restart-safe replay protection, snapshots, migration/repair, reconciliation,
+background work, and cross-process coordination remain future work.
