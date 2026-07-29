@@ -2,7 +2,34 @@
 
 ## Authority
 
-When documents disagree, use this order:
+### Evidence flow
+
+> Research
+> ↓
+> Design discussion and acceptance
+> ↓
+> Game Design Document
+> ↓
+> Vertical Slice Specifications
+> ↓
+> Architecture
+> ↓
+> Project Plan
+> ↓
+> Project Status
+
+### Documentation authority
+
+- Research is the source of evidence.
+- The accepted GDD is authoritative for product philosophy and decisions.
+- Accepted vertical-slice specifications define bounded executable behaviour.
+- Architecture describes implemented technical structure and explicitly labelled future candidates.
+- Project Plan defines accepted sequence.
+- Project Status reports verified state.
+- Research never automatically changes any downstream authority.
+- The current local working tree and verified tests remain authoritative for implementation facts.
+
+For implementation facts, use this order:
 
 1. Current local working tree and its verified implementation.
 2. [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md).
@@ -30,9 +57,12 @@ Old attachments, conversation recollections, prompt drafts, and pasted snapshots
 
 ## Research documentation
 
-No accepted Research Iteration document is present in the repository at this checkpoint. No research finding has been reconstructed from memory or from an external stale copy.
+Research is formal evidence from tabletop play. It informs design but is not implementation authority and does not automatically change the GDD, architecture, plan, status, or code.
 
-Any future accepted Research Iteration record should remain a formal research document and retain this chain:
+- [Research overview](docs/research/README.md)
+- [RI-001 — Trust Through Persistence, Perspective, and World Independence](docs/research/RI-001.md)
+
+Research Iterations, including RI-001, remain formal research documents and retain a traceability chain:
 
 > Observation
 > ↓
@@ -46,11 +76,19 @@ Any future accepted Research Iteration record should remain a formal research do
 > ↓
 > Validation
 
-Research observations do not become implementation claims until separately accepted and implemented.
+Research observations do not become implementation claims until separately accepted, scheduled, and implemented.
+
+## Documentation navigation
+
+- [GDD.md](GDD.md)
+- [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md)
+- [ARCHITECTURE.md](ARCHITECTURE.md)
+- [PROJECT_PLAN.md](PROJECT_PLAN.md)
+- [PROJECT_STATUS.md](PROJECT_STATUS.md)
 
 ## Operational and developer instructions
 
-No repository AGENTS.md or separate operational handbook is present. Deterministic commands and live-validator boundaries are summarized in README.md and PROJECT_STATUS.md.
+Repository-wide operational guidance, including the current-state authority safeguard, is defined in [AGENTS.md](AGENTS.md). Deterministic commands and live-validator boundaries are summarized in README.md and PROJECT_STATUS.md.
 
 ## Historical or obsolete material
 

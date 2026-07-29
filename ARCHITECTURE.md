@@ -6,6 +6,8 @@ This document describes the architecture implemented on develop through all seve
 
 Dungeon Manager is local first. The deterministic engine is authoritative for validated game actions and facts; AI components are clients, not state authorities; Foundry VTT is the intended presentation layer and is not implemented yet.
 
+[RI-001](docs/research/RI-001.md) provides evidence for several present boundaries and future candidate systems. Implemented architecture remains defined by the actual code and verified tests; research-derived candidates are not implemented merely because they appear in RI-001.
+
 ## Implemented dependency direction
 
 The principal implemented flow is:

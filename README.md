@@ -19,6 +19,8 @@ The final acceptance journeys prove both staged manual input and injected automa
 - [PROJECT_STATUS.md](PROJECT_STATUS.md) — verified implementation and test status.
 - [DOCUMENTATION.md](DOCUMENTATION.md) — documentation inventory, authority, and navigation, including research-record status.
 
+- [Research](docs/research/README.md) — evidence from tabletop play that informs, but does not itself change, design or implementation authority; see [RI-001](docs/research/RI-001.md).
+
 ## Local-first operation
 
 Campaign records and configuration are locally controlled. The current durable event authority is a local SQLite journal; process-local projections are rebuilt from it. The optional Ollama validation harness is separate from deterministic verification and runs only with explicit opt-in.
