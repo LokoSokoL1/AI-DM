@@ -35,27 +35,56 @@ The Phase 2 low-fidelity interface design baseline was formally accepted on
 2026-07-29 from the exact draft with SHA-256
 `21A77F35DC5606B49306F85691F55F17FCABDB71E374BBBA63F869739A640AA3`.
 Acceptance approves its product behavior and 42 acceptance criteria; it does not
-implement the interface or Foundry integration. Its ten explicitly deferred
-implementation decisions remain open. Future technical design and implementation
-must conform to the baseline or record an explicit revision.
+implement the interface or Foundry integration. On 2026-07-29, the project owner
+accepted D6 and D10 from its ten explicitly deferred implementation decisions.
+The remaining eight decisions remain open. Future technical design and
+implementation must conform to the baseline and accepted decisions or record an
+explicit revision.
+
+## Accepted Phase 2 decisions and bounded sequence
+
+- **D6 — Core/client API/adapter/permission/save/sync boundaries — accepted.**
+  Phase 2 follows a ports-and-adapters ownership direction: the deterministic
+  engine remains the authoritative domain core, a client-neutral application
+  layer coordinates authority-facing operations, and Foundry and D&D 5e remain
+  dedicated edge adapters.
+- **D10 — Implementation sequencing — accepted.**
+  Phase 2 proceeds contract-first through bounded milestones. Accepting D10 does
+  not permanently freeze the later sequence; any revision requires an explicit
+  accepted decision.
+- **M1 — Client-Neutral Authority and Operation Contracts — approved next,
+  unstarted.**
+  M1 will establish only the minimum client-neutral authority and operation
+  contracts needed to represent the existing controlled fixture and support the
+  next bounded milestones. It must not prematurely finalize detailed contracts
+  or behavior belonging to later permission, transport, Foundry, multiplayer,
+  save, branch, snapshot, or reconciliation milestones.
+- **M2 — Identity, Permission, Assignment and Visibility Core — provisional
+  following milestone only.**
+  M2 is not approved for implementation by this checkpoint and may be revised
+  through an explicit accepted decision.
+
+The other eight deferred implementation decisions remain open. No Phase 2
+implementation is recorded by this documentation checkpoint.
 
 ## Current boundary
 
 All seven accepted slice milestones are complete. There is no unstarted
-milestone in this frozen slice. The Phase 2 design baseline is accepted, but no
-Phase 2 implementation milestone has been accepted or started. The next action
-is a separate bounded Phase 2 technical-planning task that defines implementation
-sequence and resolves deferred mechanisms only through explicit decisions. The
-completed acceptance proof does not persist or replay narration or make audit
-and replay safeguards durable.
+milestone in this frozen slice. The Phase 2 design baseline, D6, and D10 are
+accepted. M1 is approved as the next Phase 2 milestone but remains unstarted.
+The next action, after this documentation checkpoint is committed and the
+checkout is clean, is the bounded M1 implementation task. The completed
+acceptance proof does not persist or replay narration or make audit and replay
+safeguards durable.
 
 General D&D rules, goblin tactics, movement, spellcasting, Foundry control, UI, voice, campaign discovery, editors, migrations, repair, background work, and cross-process coordination remain outside the completed slice scope unless explicitly scheduled.
 
 ## Later roadmap
 
 With the frozen slice validated and the Phase 2 low-fidelity interface baseline
-accepted, the next bounded technical-planning task may schedule conforming
-Foundry VTT presentation and control, management interfaces, and supporting
-systems. Broader rules coverage, richer campaign/world systems, additional local
-providers, voice interaction, and advanced automation remain future directions,
-not current implementation commitments.
+accepted, D6 and D10 define the accepted ownership direction and bounded
+contract-first starting sequence. M1 is the approved next milestone; M2 is only
+the provisional following milestone. Broader rules coverage, richer
+campaign/world systems, additional local providers, voice interaction, and
+advanced automation remain future directions, not current implementation
+commitments.

@@ -12,11 +12,40 @@ was formally accepted on 2026-07-29 from source SHA-256
 `21A77F35DC5606B49306F85691F55F17FCABDB71E374BBBA63F869739A640AA3`.
 It approves future product behavior and acceptance criteria; it does not
 describe implemented architecture. The interface and Foundry integration remain
-unimplemented, and the specification's ten deferred implementation decisions
+unimplemented. On 2026-07-29, the project owner accepted D6's
+ports-and-adapters ownership direction and D10's contract-first bounded Phase 2
+implementation sequence. The other eight deferred implementation decisions
 remain open. Future technical design and implementation must conform to this
-baseline or record an explicit revision.
+baseline and the accepted decisions or record an explicit revision.
 
 [RI-001](docs/research/RI-001.md) provides evidence for several present boundaries and future candidate systems. Implemented architecture remains defined by the actual code and verified tests; research-derived candidates are not implemented merely because they appear in RI-001.
+
+## Accepted Phase 2 architectural direction
+
+D6 — Core/client API/adapter/permission/save/sync boundaries — establishes the
+accepted ports-and-adapters ownership direction for future Phase 2 work:
+
+- The existing deterministic engine remains the authoritative domain core.
+- A client-neutral application layer will coordinate authority-facing
+  operations without becoming a second source of mechanical truth.
+- Durable operation identity belongs at the application/persistence boundary.
+- Permission-filtered views remain separate from objective world state.
+- Foundry and D&D 5e remain dedicated edge adapters. Foundry is the intended
+  interaction and presentation surface, not campaign authority.
+- AI components remain non-authoritative clients.
+
+D10 — Implementation sequencing — establishes a contract-first bounded Phase 2
+order. The approved but unstarted M1 — Client-Neutral Authority and Operation
+Contracts — may introduce only the minimum client-neutral authority and
+operation contracts needed to represent the existing controlled fixture and
+support the immediate bounded milestones. M1 must not prematurely finalize
+detailed contracts or behavior belonging to later permission, transport,
+Foundry, multiplayer, save, branch, snapshot, or reconciliation milestones.
+The later milestone sequence remains revisable only through an explicitly
+accepted decision.
+
+This section records direction, not implemented Phase 2 components. The other
+eight deferred implementation decisions remain open.
 
 ## Implemented dependency direction
 
@@ -214,10 +243,9 @@ Foundry, or voice.
 ## Future architecture
 
 All seven frozen slice milestones are complete. No unstarted milestone remains in
-this slice. The accepted Phase 2 interface baseline now constrains future work,
-but a separate bounded technical-planning task is required before implementation
-begins. General narration, narration persistence or replay, semantic
-fact-checking of arbitrary prose, general rules, goblin tactics, Foundry
-integration, UI, voice, durable audit, restart-safe replay protection, snapshots,
-migration/repair, background work, and cross-process coordination remain future
-work.
+this slice. The accepted Phase 2 interface baseline plus D6 and D10 now constrain
+future work. M1 is approved as the next bounded milestone but remains unstarted.
+General narration, narration persistence or replay, semantic fact-checking of
+arbitrary prose, general rules, goblin tactics, Foundry integration, UI, voice,
+durable audit, restart-safe replay protection, snapshots, migration/repair,
+background work, and cross-process coordination remain future work.

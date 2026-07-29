@@ -6,11 +6,14 @@
 - Checkpoint scope: the completed seven-milestone First Playable Vertical Slice, plus the formally accepted Phase 2 low-fidelity interface design baseline and canonical documentation
 - Completed slice milestone: **Milestone 7 — End-to-End First Playable Validation**
 - Accepted Phase 2 design source: SHA-256 `21A77F35DC5606B49306F85691F55F17FCABDB71E374BBBA63F869739A640AA3` on 2026-07-29
-- Next action: a separate bounded Phase 2 technical-planning task; no Phase 2 implementation milestone has started
+- Accepted Phase 2 decisions on 2026-07-29: **D6 — Core/client API/adapter/permission/save/sync boundaries** and **D10 — Implementation sequencing**
+- Approved next milestone: **M1 — Client-Neutral Authority and Operation Contracts — unstarted**
+- Next action: the bounded M1 implementation task, after this documentation checkpoint is committed and the checkout is clean
 
 The headless engine-level first playable is complete. The Phase 2 interface
 design baseline is accepted, but the described UI and Foundry integration remain
-unimplemented. Voice also remains outside this checkpoint.
+unimplemented. M1 code and tests have not been produced. Voice also remains
+outside this checkpoint.
 
 ## Accepted Phase 2 design baseline
 
@@ -19,9 +22,31 @@ is the formally accepted Phase 2 low-fidelity interface design baseline. The
 project owner accepted the exact draft on 2026-07-29 with SHA-256
 `21A77F35DC5606B49306F85691F55F17FCABDB71E374BBBA63F869739A640AA3`.
 Acceptance approves its product behavior and 42 acceptance criteria, not
-implementation. All ten explicitly deferred implementation decisions remain
-open. Future technical design and implementation must conform to the baseline or
-record an explicit revision.
+implementation. D6 and D10 were accepted on 2026-07-29; the remaining eight
+deferred implementation decisions remain open. Future technical design and
+implementation must conform to the baseline and accepted decisions or record an
+explicit revision.
+
+## Accepted Phase 2 decision state
+
+- D6 accepts the ports-and-adapters ownership direction for the deterministic
+  core, client-neutral application boundary, dedicated edge adapters,
+  permission-filtered views, saves, and synchronization boundaries without
+  implementing those future systems here.
+- D10 accepts a contract-first bounded implementation sequence. Later milestone
+  ordering is not permanently frozen and may change only through an explicit
+  accepted decision.
+- M1 is approved but unstarted. Its binding scope is only the minimum
+  client-neutral authority and operation contracts needed to represent the
+  existing controlled fixture and support the next bounded milestones.
+- M1 must not prematurely finalize detailed contracts or behavior belonging to
+  later permission, transport, Foundry, multiplayer, save, branch, snapshot, or
+  reconciliation milestones.
+- M2 — Identity, Permission, Assignment and Visibility Core — is only the
+  provisional following milestone.
+
+This documentation checkpoint implements no Phase 2 capability. No M1 source
+code or tests exist yet.
 
 ## Implemented behavior
 
@@ -85,8 +110,8 @@ The two deterministic guard tests stored in dungeon_manager/ai/test_live_tool_lo
 - Narration is implemented only for the single verified controlled-round event. It does not provide semantic proof of unrestricted provider prose, general event narration, persistence, streaming, retry, fallback, or automatic replay after restart.
 - ToolAgent and tools are not part of the narration path and remain disconnected from controlled combat.
 - Process-local audit history, replay guards, provider history, narration text, and Python object identity do not survive restart; no new persistence mechanism was added for them.
-- All seven frozen slice milestones are complete; a separate plan is required for
-  any later development phase.
+- All seven frozen slice milestones are complete; M1 is approved as the next
+  bounded Phase 2 milestone but remains unstarted.
 - The slice is one fixed campaign, one selectable player character, one hostile goblin, one permitted rapier attack, and one aggregate controlled-round event.
 - Goblin tactical behavior is deliberately absent; the goblin-first path records only the accepted no-action advancement.
 - Foundry VTT integration, UI, voice, general D&D rules, movement, spells, campaign discovery, editors, and broader content systems are not implemented.
@@ -96,7 +121,7 @@ The two deterministic guard tests stored in dungeon_manager/ai/test_live_tool_lo
 
 ## Next action
 
-No unstarted milestone remains in the frozen seven-milestone slice. Any next
-development phase requires separate planning. The next bounded task is Phase 2
-technical planning that conforms to the accepted interface baseline; no Phase 2
-implementation milestone is started here.
+No unstarted milestone remains in the frozen seven-milestone slice. After this
+documentation checkpoint is committed and the checkout is clean, the next
+bounded task is M1 — Client-Neutral Authority and Operation Contracts. M1
+remains unstarted, and its minimum-contract constraint remains binding.
