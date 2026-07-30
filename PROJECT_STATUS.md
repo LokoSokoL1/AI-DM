@@ -3,19 +3,18 @@
 ## Checkpoint
 
 - Branch: develop
-- Checkpoint scope: the completed seven-milestone First Playable Vertical Slice, the formally accepted Phase 2 low-fidelity interface design baseline, completed Phase 2 M1, and the accepted but unstarted Phase 2 M2 scope and task
+- Checkpoint scope: the completed seven-milestone First Playable Vertical Slice, the formally accepted Phase 2 low-fidelity interface design baseline, completed Phase 2 M1, and implemented and verified Phase 2 M2
 - Completed slice milestone: **Milestone 7 — End-to-End First Playable Validation**
 - Accepted Phase 2 design source: SHA-256 `21A77F35DC5606B49306F85691F55F17FCABDB71E374BBBA63F869739A640AA3` on 2026-07-29
 - Accepted Phase 2 decisions on 2026-07-29: **D6 — Core/client API/adapter/permission/save/sync boundaries** and **D10 — Implementation sequencing**
 - Completed Phase 2 milestone: **M1 — Client-Neutral Authority and Operation Contracts**
-- Approved next bounded milestone: **M2 — Identity, Permission, Assignment and Visibility Core — unstarted**
+- Completed Phase 2 milestone: **M2 — Identity, Permission, Assignment and Visibility Core**
 
 The headless engine-level first playable is complete. The Phase 2 interface
 design baseline is accepted, but the described UI and Foundry integration remain
 unimplemented. M1 is implemented and verified within its minimum-contract
-constraint. The project owner accepted the bounded M2 scope on 2026-07-29, but
-no M2 source code or tests have been produced. Voice also remains outside this
-checkpoint.
+constraint. M2 is implemented and verified within its bounded
+controlled-fixture authorization scope. Voice remains outside this checkpoint.
 
 ## Accepted Phase 2 design baseline
 
@@ -45,12 +44,12 @@ decisions or record an explicit revision.
   later permission, transport, Foundry, multiplayer, save, branch, snapshot, or
   reconciliation milestones.
 - The project owner accepted the bounded scope of M2 — Identity, Permission,
-  Assignment and Visibility Core — on 2026-07-29. M2 is the approved next
-  bounded milestone and remains unstarted.
+  Assignment and Visibility Core — on 2026-07-29. M2 is implemented and
+  deterministically verified.
 - [PHASE_2_M2_SCOPE_PROPOSAL.md](PHASE_2_M2_SCOPE_PROPOSAL.md) and
   [PHASE_2_M2_IMPLEMENTATION_TASK.md](PHASE_2_M2_IMPLEMENTATION_TASK.md) are the
   accepted scope and final next-step records.
-- M2 will add a client-neutral, fail-closed authorization core around the M1
+- M2 adds a client-neutral, fail-closed authorization core around the M1
   controlled-fixture boundary while keeping session identity, participant role,
   speaker mode, controlled actor, assignment, Speak-as grant, Act-as grant,
   viewing perspective, and visibility audience distinct. Client-supplied labels
@@ -62,7 +61,7 @@ decisions or record an explicit revision.
   one of those decisions.
 
 The other eight deferred implementation decisions, D1–D5 and D7–D9, remain
-open. M2 is approved but has not started, and no M2 source code or tests exist.
+open. M2 did not select or finalize any of them.
 
 ## Implemented behavior
 
@@ -115,6 +114,44 @@ open. M2 is approved but has not started, and no M2 source code or tests exist.
   persistence, or concrete runtimes. The engine remains independent of both the
   application and adapter layers.
 
+### Phase 2 M2 — Identity, Permission, Assignment and Visibility Core
+
+- Standard-library-only immutable `phase2-m2-v1` contracts keep session,
+  participant, Player/DM role, OOC/DM/actor speaker mode, controlled actor,
+  player-character assignment, Speak-as grant, Act-as grant, viewing
+  perspective, visibility audience, permission decision, and actor-control
+  disposition distinct.
+- An injected trusted identity authority resolves opaque session references.
+  Unknown, revoked, expired, mismatched, or malformed identity results fail
+  closed; M2 issues, verifies, stores, and transports no credential.
+- Exact pure permission evaluation runs before M1 delegation. OOC grants no
+  mechanical authority; DM speaker mode requires the resolved DM role but does
+  not grant arbitrary actor control. A player-character assignment authorizes
+  that participant's assigned actor.
+- Speak-as and Act-as grants are independently participant-, campaign-, actor-,
+  and capability-scoped. Revocation and optional UTC expiry use the injected
+  trusted clock. Only the assignment or an active Act-as grant yields direct
+  control; other actor disposition remains AI-default.
+- `PermissionedControlledFixtureFacade` gates inspection, capability discovery,
+  selection, controlled-round resolution, and operation reconstruction. Every
+  denial returns only a bounded reason, delegates zero times to M1, and exposes
+  no command, event, mechanical, presentation, or hidden identity payload.
+- Authorized calls delegate exactly once through the unchanged M1 façade.
+  Existing command gating, dice, durable-before-local publication, projection,
+  synchronization, narration eligibility, and restart reconstruction remain
+  unchanged.
+- Immutable entries use explicit public, participant-set, DM-only, or
+  no-client-disclosure audiences. Filtering returns only admitted entries,
+  emits no placeholder or audience metadata, and never infers visibility from
+  prose, event type, speaker choice, UI state, or AI interpretation.
+- `InProcessPermissionContext` provides defensively copied process-local
+  identities, assignments, grants, audiences, and fixed trusted UTC time for
+  the controlled fixture. It makes no durable permission, authentication,
+  reconnect, multiplayer, admission, or save claim.
+- Dependency guards keep M2 contracts and evaluation client-neutral, concrete
+  adapters pointing inward, the M1 authority adapter independent of M2, and the
+  deterministic engine independent of both application and adapter layers.
+
 ### First Playable Vertical Slice Milestones 1–7
 
 - Explicit V1 fixture identities for campaign vertical-slice-v1, journal vertical-slice-v1-events, scene controlled-goblin-encounter, Nekria, and goblin-1.
@@ -144,15 +181,16 @@ All seven milestones of the accepted vertical slice are implemented and verified
 
 ## Verification
 
-- Focused Phase 2 M1 contracts, façade, adapter, journeys, reconstruction,
-  diagnostics, and dependency tests: **54 passed**.
-- Directly affected command, policy, pipeline, projection, persistence,
-  runtime, restart, narration, acceptance, application, and dependency tests:
-  **354 passed**.
-- Focused Milestone 7 end-to-end first-playable acceptance: **2 passed**.
-- Directly affected runtime, controlled-round, journal, projection, hydration, narration, pipeline, and dependency suite: **188 passed**.
-- Complete engine suite: **540 passed**.
-- Complete deterministic pytest suite: **644 passed**, with dungeon_manager/ai/test_live_tool_loop_validation.py explicitly excluded.
+- Focused Phase 2 M2 contracts, evaluator, permissioned façade, controlled
+  journeys, reconstruction barriers, visibility, and dependency tests:
+  **57 passed**.
+- Complete client-neutral application and dependency suite, including M1
+  compatibility: **89 passed**.
+- Complete application and engine suite covering command, policy, pipeline,
+  projection, persistence, runtime, restart, narration, acceptance, M1, M2, and
+  dependency behavior: **607 passed**.
+- Complete deterministic pytest suite: **679 passed**, with
+  `dungeon_manager/ai/test_live_tool_loop_validation.py` explicitly excluded.
 - Five isolated legacy smoke modules: **passed** for models, storage, managers, tools, and registry.
 - Normal data/ and logs/ manifest: **unchanged** by path, type, size, UTC modification timestamp, and SHA-256.
 - Live validator, Ollama, and all external AI providers: **not invoked**.
@@ -164,21 +202,21 @@ The two deterministic guard tests stored in dungeon_manager/ai/test_live_tool_lo
 - Narration is implemented only for the single verified controlled-round event. It does not provide semantic proof of unrestricted provider prose, general event narration, persistence, streaming, retry, fallback, or automatic replay after restart.
 - ToolAgent and tools are not part of the narration path and remain disconnected from controlled combat.
 - Process-local audit history, replay guards, provider history, narration text, and Python object identity do not survive restart; no new persistence mechanism was added for them.
-- All seven frozen slice milestones and Phase 2 M1 are complete. M2 is the
-  approved next bounded milestone and remains unstarted.
+- All seven frozen slice milestones plus Phase 2 M1 and M2 are complete and
+  verified. No later Phase 2 milestone is approved by this checkpoint.
 - The slice is one fixed campaign, one selectable player character, one hostile goblin, one permitted rapier attack, and one aggregate controlled-round event.
 - Goblin tactical behavior is deliberately absent; the goblin-first path records only the accepted no-action advancement.
 - Foundry VTT integration, UI, voice, general D&D rules, movement, spells, campaign discovery, editors, and broader content systems are not implemented.
 - Event history is durable. Command-audit history, replay protection, and world-state snapshots remain process-local.
+- M2 identities, assignments, grants, audiences, and clock data are
+  process-local only; authentication and durable permission persistence are not
+  implemented.
 - Recovery, migration, repair, retries, polling, background workers, and cross-process coordination are not general product features.
 - Ollama behavior has prior opt-in validation but remains nondeterministic and outside this checkpoint's pass/fail evidence.
 
 ## Next action
 
-No unstarted milestone remains in the frozen seven-milestone slice. After this
-clean documentation checkpoint is committed, pushed, synchronized, and the
-checkout is clean, the next action is the bounded
-[Phase 2 M2 implementation task](PHASE_2_M2_IMPLEMENTATION_TASK.md). M2 —
-Identity, Permission, Assignment and Visibility Core — is approved but
-unstarted. All exclusions and the stop condition for D1–D5 and D7–D9 remain
-binding.
+No unstarted milestone remains in the frozen seven-milestone slice. Phase 2 M1
+and M2 are complete and verified. No later Phase 2 milestone is approved or
+scheduled; the next action requires a separately accepted bounded proposal.
+D1–D5 and D7–D9 remain open, and the M2 exclusions remain binding.

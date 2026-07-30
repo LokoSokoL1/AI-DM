@@ -481,6 +481,16 @@ def test_client_neutral_contract_and_application_layers_point_inward_only():
     application_root = package_root / "application"
     expected_relative_imports = {
         "contracts.py": set(),
+        "permission_contracts.py": set(),
+        "permission_ports.py": {"permission_contracts"},
+        "permissions.py": {"permission_contracts"},
+        "permissioned_controlled_fixture.py": {
+            "contracts",
+            "controlled_fixture",
+            "permission_contracts",
+            "permission_ports",
+            "permissions",
+        },
         "ports.py": {"contracts"},
         "controlled_fixture.py": {"contracts", "ports"},
     }
@@ -526,6 +536,41 @@ def test_client_neutral_contract_and_application_layers_point_inward_only():
         )
         assert not (accessed_names & forbidden_names)
         assert "Integrate AI" not in source
+
+
+def test_in_process_permission_adapter_has_no_engine_persistence_or_edge_dependency():
+    path = (
+        Path(__file__).resolve().parent.parent
+        / "adapters"
+        / "in_process_permissions.py"
+    )
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+    absolute_modules = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {
+        node.module or ""
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level == 0
+    }
+    forbidden_prefixes = (
+        "dungeon_manager.ai",
+        "dungeon_manager.engine",
+        "dungeon_manager.foundry",
+        "dungeon_manager.managers",
+        "dungeon_manager.storage",
+        "dungeon_manager.tools",
+        "dungeon_manager.ui",
+    )
+
+    assert not any(
+        module.startswith(forbidden_prefixes) for module in absolute_modules
+    )
+    assert "sqlite3" not in absolute_modules
+    assert "Integrate AI" not in source
 
 
 def test_in_process_controlled_fixture_adapter_has_no_edge_client_or_ai_tools():

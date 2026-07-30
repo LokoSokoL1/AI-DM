@@ -3,7 +3,7 @@
 ## Status and scope
 
 This document describes the architecture implemented on develop through all
-seven First Playable Vertical Slice milestones and Phase 2 M1. Future work is
+seven First Playable Vertical Slice milestones and Phase 2 M2. Future work is
 labelled explicitly. The frozen product behavior is in
 [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md).
 
@@ -18,10 +18,11 @@ describe implemented architecture. The interface and Foundry integration remain
 unimplemented. On 2026-07-29, the project owner accepted D6's
 ports-and-adapters ownership direction and D10's contract-first bounded Phase 2
 implementation sequence. The other eight deferred implementation decisions
-remain open as D1–D5 and D7–D9. The project owner also accepted the bounded M2
-architectural direction on 2026-07-29; it remains unimplemented. Future
-technical design and implementation must conform to this baseline and the
-accepted decisions or record an explicit revision.
+remain open as D1–D5 and D7–D9. The project owner accepted the bounded M2
+architectural direction on 2026-07-29, and the resulting client-neutral core is
+implemented and deterministically verified within that scope. Future technical
+design and implementation must conform to this baseline and the accepted
+decisions or record an explicit revision.
 
 [RI-001](docs/research/RI-001.md) provides evidence for several present boundaries and future candidate systems. Implemented architecture remains defined by the actual code and verified tests; research-derived candidates are not implemented merely because they appear in RI-001.
 
@@ -48,32 +49,64 @@ later permission, transport, Foundry, multiplayer, save, branch, snapshot, or
 reconciliation milestones. The later milestone sequence remains revisable only
 through an explicitly accepted decision.
 
-### Phase 2 M2 accepted future direction
+### Phase 2 M2 identity, permission, assignment, and visibility core
 
-M2 — Identity, Permission, Assignment and Visibility Core — is accepted as the
-next bounded milestone but is not implemented. Its permissioned coordinator
-will wrap the existing M1 authority-facing façade, evaluate authorization before
-delegation, and preserve M1 as the path to authoritative mechanics and outcomes.
+M2 wraps the M1 authority-facing façade without changing M1 V1 semantics:
 
-Identity resolution will be trusted and injected through a client-neutral port.
-This direction does not implement authentication, credential issuance,
-verification, storage, pairing, or transport. Session identity, participant
-role, speaker mode, controlled actor, actor assignment, Speak-as grant, Act-as
-grant, viewing perspective, and visibility audience remain separate concepts;
-client-supplied labels never establish authority.
+    client-neutral caller
+      -> PermissionedControlledFixtureFacade
+      -> trusted identity, permission-state, clock, and visibility ports
+      -> pure permission evaluation
+      -> ControlledFixtureFacade only when allowed
+      -> explicit audience filtering
+      -> permissioned client view
 
-Permission evaluation will be exact, typed, deterministic, side-effect-free,
-and fail-closed. Objective world state will remain separate from
-permission-filtered participant views, and filtering will use explicit
-visibility audiences rather than prose, UI state, speaker selection, or AI
-interpretation. Deterministic process-local permission and assignment state may
-support the bounded controlled fixture without claiming durable permission
-persistence.
+`dungeon_manager.application.permission_contracts` owns the standard-library-
+only immutable M2 contracts. Its explicit `phase2-m2-v1` version keeps opaque
+session reference, resolved participant identity and base role, speaker
+selection, controlled actor, player-character assignment, scoped Speak-as and
+Act-as grants, viewing perspective, visibility audience, permission decision,
+and actor-control disposition distinct. Unknown or untyped versions, roles,
+speaker modes, capabilities, grant states, and audience states fail closed.
+
+`dungeon_manager.application.permissions` performs exact, deterministic,
+side-effect-free evaluation. A resolved active identity may inspect and discover
+capabilities. OOC is a speaker mode with no mechanical authority. DM speaker and
+DM perspective require the resolved DM role, but DM speaker mode alone grants no
+actor control. A controlled player-character assignment authorizes speaking and
+acting as that actor. Speak-as and Act-as grants are independently scoped to one
+participant, campaign, actor, and capability; revocation and optional UTC
+expiry are evaluated through the trusted injected clock. Only an assignment or
+active Act-as grant yields direct actor control; otherwise NPC, companion, and
+AI-party-member disposition remains AI-default.
+
+`PermissionedControlledFixtureFacade` resolves identity and evaluates every
+permission before calling M1. Denied views contain one bounded public reason and
+no fixture, capability, command, event, mechanical, or presentation payload.
+Authorized selection, controlled-round resolution, and reconstruction delegate
+exactly once through M1, so command gating, dice, durable-before-local
+publication, projection, synchronization, narration eligibility, and restart
+behavior remain unchanged. A requested actor, client label, speaker choice,
+existing engine selection, command ID, or event ID is never proof of authority.
+
+Visibility filtering consumes immutable entries carrying an explicit audience:
+public, an exact participant set, DM-only, or no-client-disclosure. It returns
+only admitted entries, exposes no audience metadata or placeholder for omitted
+entries, and never derives visibility from prose, event type, UI state,
+speaker selection, or AI interpretation. Objective M1/engine state remains
+unchanged behind this participant-view boundary.
+
+`InProcessPermissionContext` is the sole concrete M2 adapter. It defensively
+copies preconfigured identities, assignments, grants, audiences, and a fixed
+trusted UTC time, exposes only the four narrow read-only ports, and composes the
+permissioned controlled fixture. This state is process-local verification state,
+not authentication, credential handling, durable permission persistence,
+reconnection restoration, multiplayer admission, or save integration.
 
 The deterministic engine remains mechanical authority, durable committed event
-history remains world-fact authority, and AI remains non-authoritative. M2 does
-not select D1–D5 or D7–D9 and must stop if implementation requires one of those
-open decisions.
+history remains world-fact authority, M1 remains the authority-facing
+client-neutral operation boundary, and AI remains non-authoritative. M2 did not
+select D1–D5 or D7–D9.
 
 The other eight deferred implementation decisions, D1–D5 and D7–D9, remain
 open.
@@ -328,6 +361,9 @@ Foundry, or voice.
 - Command replay protection: process-local dispatcher state; it is not restart persistent.
 - Caller operation correlation: supplied by the client and returned in M1
   operation views; it is not authoritative state or durable deduplication.
+- Session identities, participant roles, controlled-fixture assignments,
+  Speak-as and Act-as grants, visibility audiences, and the trusted test clock:
+  immutable process-local M2 adapter state; none is durably persisted.
 - Verified narration and tool observations: transient presentation data, never authoritative game state unless a future separately accepted owner is introduced.
 - Foundry state: no implemented ownership or synchronization path.
 
@@ -336,9 +372,9 @@ Foundry, or voice.
 All seven frozen slice milestones are complete. No unstarted milestone remains in
 this slice. The accepted Phase 2 interface baseline plus D6 and D10 constrain
 future work. M1 is implemented and verified. M2 — Identity, Permission,
-Assignment and Visibility Core — is the approved next bounded milestone and has
-not started; its accepted architectural direction is described above, not as
-implemented behavior. General narration, narration persistence or replay,
+Assignment and Visibility Core — is implemented and verified within its bounded
+controlled-fixture scope. No later Phase 2 milestone is approved by this
+checkpoint. General narration, narration persistence or replay,
 semantic fact-checking of arbitrary prose, general rules, goblin tactics,
 Foundry integration, UI, voice, durable permission persistence, durable audit,
 restart-safe replay protection, snapshots, migration/repair, reconciliation,
