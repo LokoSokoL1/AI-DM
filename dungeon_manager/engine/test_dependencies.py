@@ -481,12 +481,23 @@ def test_client_neutral_contract_and_application_layers_point_inward_only():
     application_root = package_root / "application"
     expected_relative_imports = {
         "contracts.py": set(),
+        "durable_operation.py": {
+            "contracts",
+            "controlled_fixture",
+            "durable_operation_contracts",
+            "durable_operation_ports",
+            "permission_contracts",
+        },
+        "durable_operation_contracts.py": set(),
+        "durable_operation_ports.py": {"durable_operation_contracts"},
         "permission_contracts.py": set(),
         "permission_ports.py": {"permission_contracts"},
         "permissions.py": {"permission_contracts"},
         "permissioned_controlled_fixture.py": {
             "contracts",
             "controlled_fixture",
+            "durable_operation",
+            "durable_operation_contracts",
             "permission_contracts",
             "permission_ports",
             "permissions",
@@ -571,6 +582,70 @@ def test_in_process_permission_adapter_has_no_engine_persistence_or_edge_depende
     )
     assert "sqlite3" not in absolute_modules
     assert "Integrate AI" not in source
+
+
+def test_m3_sqlite_and_composition_adapters_keep_authority_dependencies_inward():
+    adapters_root = Path(__file__).resolve().parent.parent / "adapters"
+    sqlite_path = adapters_root / "sqlite_durable_operations.py"
+    composition_path = adapters_root / "durable_controlled_fixture.py"
+
+    sqlite_source = sqlite_path.read_text(encoding="utf-8")
+    sqlite_tree = ast.parse(sqlite_source, filename=str(sqlite_path))
+    sqlite_modules = {
+        alias.name
+        for node in ast.walk(sqlite_tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {
+        node.module or ""
+        for node in ast.walk(sqlite_tree)
+        if isinstance(node, ast.ImportFrom) and node.level == 0
+    }
+    assert "sqlite3" in sqlite_modules
+    assert not any(
+        module.startswith(
+            (
+                "dungeon_manager.ai",
+                "dungeon_manager.engine",
+                "dungeon_manager.foundry",
+                "dungeon_manager.managers",
+                "dungeon_manager.storage",
+                "dungeon_manager.tools",
+                "dungeon_manager.ui",
+            )
+        )
+        for module in sqlite_modules
+    )
+
+    composition_source = composition_path.read_text(encoding="utf-8")
+    composition_tree = ast.parse(
+        composition_source, filename=str(composition_path)
+    )
+    composition_modules = {
+        alias.name
+        for node in ast.walk(composition_tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {
+        node.module or ""
+        for node in ast.walk(composition_tree)
+        if isinstance(node, ast.ImportFrom) and node.level == 0
+    }
+    assert "sqlite3" not in composition_modules
+    assert not any(
+        module.startswith(
+            (
+                "dungeon_manager.ai",
+                "dungeon_manager.engine",
+                "dungeon_manager.foundry",
+                "dungeon_manager.managers",
+                "dungeon_manager.storage",
+                "dungeon_manager.tools",
+                "dungeon_manager.ui",
+            )
+        )
+        for module in composition_modules
+    )
 
 
 def test_in_process_controlled_fixture_adapter_has_no_edge_client_or_ai_tools():

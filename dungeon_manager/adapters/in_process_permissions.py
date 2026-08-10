@@ -10,6 +10,9 @@ from typing import Optional
 from dungeon_manager.application.controlled_fixture import (
     ControlledFixtureFacade,
 )
+from dungeon_manager.application.durable_operation import (
+    DurableOperationCoordinator,
+)
 from dungeon_manager.application.permission_contracts import (
     ActorAssignment,
     ActorReference,
@@ -139,6 +142,7 @@ def compose_permissioned_controlled_fixture(
     *,
     campaign: CampaignReference,
     controlled_actor: ActorReference,
+    durable_operations: DurableOperationCoordinator | None = None,
 ) -> PermissionedControlledFixtureFacade:
     """Compose the bounded M2 wrapper without adding durable permission state."""
 
@@ -152,4 +156,5 @@ def compose_permissioned_controlled_fixture(
         context,
         campaign=campaign,
         controlled_actor=controlled_actor,
+        durable_operations=durable_operations,
     )

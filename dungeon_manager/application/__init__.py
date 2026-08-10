@@ -30,6 +30,23 @@ from .controlled_fixture import (
     ControlledFixtureFacade,
     ControlledFixtureUnavailableError,
 )
+from .durable_operation import DurableOperationCoordinator
+from .durable_operation_contracts import (
+    CampaignOperationKey,
+    CanonicalOperationIdentity,
+    DurableOperationContractVersion,
+    DurableOperationDiagnostic,
+    DurableOperationDiagnosticCode,
+    DurableOperationKind,
+    DurableOperationLifecycle,
+    DurableOperationRecord,
+    DurableOperationSubmission,
+    DurableReplayDisposition,
+    DurableStoreDisposition,
+    DurableStoreResult,
+    DurableTerminalOutcome,
+)
+from .durable_operation_ports import DurableOperationStorePort
 from .ports import ControlledFixtureAuthorityPort
 from .permission_contracts import (
     ActorAssignment,
@@ -84,7 +101,9 @@ __all__ = [
     "CapabilityKey",
     "CapabilityReason",
     "CapabilityStatus",
+    "CampaignOperationKey",
     "CampaignReference",
+    "CanonicalOperationIdentity",
     "ClientDiagnostic",
     "ClientDiceMode",
     "ContractVersion",
@@ -94,6 +113,19 @@ __all__ = [
     "ControlledFixtureView",
     "DiagnosticCode",
     "DurableCommitState",
+    "DurableOperationContractVersion",
+    "DurableOperationCoordinator",
+    "DurableOperationDiagnostic",
+    "DurableOperationDiagnosticCode",
+    "DurableOperationKind",
+    "DurableOperationLifecycle",
+    "DurableOperationRecord",
+    "DurableOperationStorePort",
+    "DurableOperationSubmission",
+    "DurableReplayDisposition",
+    "DurableStoreDisposition",
+    "DurableStoreResult",
+    "DurableTerminalOutcome",
     "IdentityKind",
     "IdentityState",
     "GrantCapability",

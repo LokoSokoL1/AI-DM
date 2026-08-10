@@ -82,6 +82,18 @@ explicit revision.
   persistence, saves, snapshots, and reconciliation remain unimplemented and
   undecided where previously open. D1–D5 and D7–D9 remain open. M2 must stop
   rather than select one of those decisions if implementation requires it.
+- **M3 — Durable Operation Identity and Idempotent Submission Core — completed
+  and verified.**
+  Its binding scope is defined by
+  [PHASE_2_M3_SCOPE_PROPOSAL.md](PHASE_2_M3_SCOPE_PROPOSAL.md). M3 adds one
+  campaign-scoped SQLite operation ledger beneath M2 authorization and above
+  M1 for the existing state-changing controlled-fixture operations only. Exact
+  terminal retries replay sanitized recorded evidence without M1; different
+  content under the same key collides; dispatch-started ambiguity never
+  redispatches without durable event proof through M1's existing no-reroll
+  correlation path. Inspection, discovery, and permission evaluation reserve
+  nothing. Narration remains transient and is never stored in the operation
+  ledger.
 
 The other eight deferred implementation decisions, D1–D5 and D7–D9, remain
 open.
@@ -91,22 +103,29 @@ open.
 All seven accepted slice milestones are complete. There is no unstarted
 milestone in this frozen slice. The Phase 2 design baseline, D6, and D10 are
 accepted. M1 is completed and verified within its minimum-contract constraint.
-M2 is completed and verified within its accepted controlled-fixture scope. Its
-accepted scope and implementation task are recorded in
+M2 and M3 are completed and verified within their accepted controlled-fixture
+scopes. Their accepted scope and implementation records are
 [PHASE_2_M2_SCOPE_PROPOSAL.md](PHASE_2_M2_SCOPE_PROPOSAL.md) and
-[PHASE_2_M2_IMPLEMENTATION_TASK.md](PHASE_2_M2_IMPLEMENTATION_TASK.md). The
-completed slice, M1, and M2 do not persist or replay narration, make audit and
-replay safeguards durable, or implement authentication, transport, Foundry,
-multiplayer, saves, branches, snapshots, restoration, synchronization adapters,
-durable permission state, or reconciliation.
+[PHASE_2_M2_IMPLEMENTATION_TASK.md](PHASE_2_M2_IMPLEMENTATION_TASK.md), plus
+[PHASE_2_M3_SCOPE_PROPOSAL.md](PHASE_2_M3_SCOPE_PROPOSAL.md) and
+[PHASE_2_M3_IMPLEMENTATION_TASK.md](PHASE_2_M3_IMPLEMENTATION_TASK.md). M3
+persists only bounded controlled-fixture operation identity and sanitized
+terminal evidence. The completed slice and Phase 2 milestones do not persist
+or replay narration, make general audit/replay safeguards durable, or implement
+authentication, transport, Foundry, multiplayer, saves, branches, snapshots,
+restoration, synchronization adapters, durable permission state, or
+reconciliation.
 
-General D&D rules, goblin tactics, movement, spellcasting, Foundry control, UI, voice, campaign discovery, editors, migrations, repair, background work, and cross-process coordination remain outside the completed slice scope unless explicitly scheduled.
+General D&D rules, goblin tactics, movement, spellcasting, Foundry control, UI,
+voice, campaign discovery, editors, migrations, repair, background work, and
+cross-process coordination beyond M3's bounded SQLite operation claims remain
+outside the completed scope unless explicitly scheduled.
 
 ## Later roadmap
 
 With the frozen slice validated and the Phase 2 low-fidelity interface baseline
 accepted, D6 and D10 define the accepted ownership direction and bounded
-contract-first sequence. M1 and M2 are completed and verified. No later Phase 2
+contract-first sequence. M1, M2, and M3 are completed and verified. No later Phase 2
 milestone is approved or scheduled by this checkpoint; any next milestone
 requires a separate bounded proposal and explicit acceptance while D1–D5 and
 D7–D9 remain open. Broader rules coverage, richer campaign/world systems,

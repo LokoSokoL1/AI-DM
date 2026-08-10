@@ -15,6 +15,8 @@ from .contracts import (
     SelectPlayerCharacterRequest,
 )
 from .controlled_fixture import ControlledFixtureFacade
+from .durable_operation import DurableOperationCoordinator
+from .durable_operation_contracts import DurableOperationSubmission
 from .permission_contracts import (
     ActorAssignment,
     ActorReference,
@@ -86,6 +88,7 @@ class PermissionedControlledFixtureFacade:
         *,
         campaign: CampaignReference,
         controlled_actor: ActorReference,
+        durable_operations: DurableOperationCoordinator | None = None,
     ) -> None:
         if not isinstance(authority, ControlledFixtureFacade):
             raise ValueError("Permissioned façade requires the M1 façade.")
@@ -101,6 +104,10 @@ class PermissionedControlledFixtureFacade:
             raise ValueError("Controlled campaign reference must be typed.")
         if not isinstance(controlled_actor, ActorReference):
             raise ValueError("Controlled actor reference must be typed.")
+        if durable_operations is not None and not isinstance(
+            durable_operations, DurableOperationCoordinator
+        ):
+            raise ValueError("Durable operation coordinator is invalid.")
         self.__authority = authority
         self.__identity_authority = identity_authority
         self.__permission_state = permission_state
@@ -108,6 +115,7 @@ class PermissionedControlledFixtureFacade:
         self.__visibility = visibility
         self.__campaign = campaign
         self.__controlled_actor = controlled_actor
+        self.__durable_operations = durable_operations
 
     def inspect(self, request: PermissionRequest) -> PermissionedView:
         authorized = self._authorize(
@@ -274,12 +282,29 @@ class PermissionedControlledFixtureFacade:
             return authorized
         decision, identity, _, _, _ = authorized
         try:
-            result = delegate(operation)
+            if self.__durable_operations is None:
+                result = delegate(operation)
+            elif capability is PermissionCapability.SELECT_PLAYER_CHARACTER:
+                result = self.__durable_operations.select_player_character(
+                    identity.participant,
+                    request.campaign,
+                    request.actor,
+                    operation,
+                )
+            elif capability is PermissionCapability.RESOLVE_CONTROLLED_ROUND:
+                result = self.__durable_operations.resolve_controlled_round(
+                    identity.participant,
+                    request.campaign,
+                    request.actor,
+                    operation,
+                )
+            else:
+                result = delegate(operation)
         except Exception:
             return PermissionedView(
                 PermissionContractVersion.V1, kind, decision
             )
-        if not isinstance(result, OperationView):
+        if not isinstance(result, (OperationView, DurableOperationSubmission)):
             return PermissionedView(
                 PermissionContractVersion.V1, kind, decision
             )

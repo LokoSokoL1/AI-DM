@@ -3,7 +3,7 @@
 ## Status and scope
 
 This document describes the architecture implemented on develop through all
-seven First Playable Vertical Slice milestones and Phase 2 M2. Future work is
+seven First Playable Vertical Slice milestones and Phase 2 M3. Future work is
 labelled explicitly. The frozen product behavior is in
 [FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md](FIRST_PLAYABLE_VERTICAL_SLICE_GDD_V1.md).
 
@@ -19,10 +19,11 @@ unimplemented. On 2026-07-29, the project owner accepted D6's
 ports-and-adapters ownership direction and D10's contract-first bounded Phase 2
 implementation sequence. The other eight deferred implementation decisions
 remain open as D1–D5 and D7–D9. The project owner accepted the bounded M2
-architectural direction on 2026-07-29, and the resulting client-neutral core is
-implemented and deterministically verified within that scope. Future technical
-design and implementation must conform to this baseline and the accepted
-decisions or record an explicit revision.
+architectural direction on 2026-07-29 and M3 durable-operation direction on
+2026-07-30. The resulting client-neutral cores are implemented and
+deterministically verified within those scopes. Future technical design and
+implementation must conform to this baseline and the accepted decisions or
+record an explicit revision.
 
 [RI-001](docs/research/RI-001.md) provides evidence for several present boundaries and future candidate systems. Implemented architecture remains defined by the actual code and verified tests; research-derived candidates are not implemented merely because they appear in RI-001.
 
@@ -83,11 +84,14 @@ AI-party-member disposition remains AI-default.
 `PermissionedControlledFixtureFacade` resolves identity and evaluates every
 permission before calling M1. Denied views contain one bounded public reason and
 no fixture, capability, command, event, mechanical, or presentation payload.
-Authorized selection, controlled-round resolution, and reconstruction delegate
-exactly once through M1, so command gating, dice, durable-before-local
-publication, projection, synchronization, narration eligibility, and restart
-behavior remain unchanged. A requested actor, client label, speaker choice,
-existing engine selection, command ID, or event ID is never proof of authority.
+Authorized operations delegate through the next configured client-neutral
+boundary only after permission succeeds. The original M2 composition delegates
+directly to M1; the M3 composition routes only state-changing selection and
+controlled-round submissions through the durable coordinator first. Command
+gating, dice, durable-before-local publication, projection, synchronization,
+narration eligibility, and restart behavior remain unchanged. A requested
+actor, client label, speaker choice, existing engine selection, command ID, or
+event ID is never proof of authority.
 
 Visibility filtering consumes immutable entries carrying an explicit audience:
 public, an exact participant set, DM-only, or no-client-disclosure. It returns
@@ -107,6 +111,60 @@ The deterministic engine remains mechanical authority, durable committed event
 history remains world-fact authority, M1 remains the authority-facing
 client-neutral operation boundary, and AI remains non-authoritative. M2 did not
 select D1–D5 or D7–D9.
+
+### Phase 2 M3 durable operation identity and idempotent submission core
+
+M3 adds one optional bounded composition without changing M1 or M2 contracts:
+
+    client-neutral caller
+      -> PermissionedControlledFixtureFacade
+      -> M2 identity resolution and permission evaluation
+      -> DurableOperationCoordinator for authorized state-changing calls
+      -> DurableOperationStorePort
+      -> SQLiteDurableOperationStore
+      -> ControlledFixtureFacade only after an atomic dispatch claim
+      -> existing runtime, engine, and durable event journal
+
+`dungeon_manager.application.durable_operation_contracts` owns immutable
+`phase2-m3-v1` contracts. A `CampaignOperationKey` scopes the caller operation
+key to one campaign. `CanonicalOperationIdentity` binds the resolved participant,
+campaign, bounded operation kind, M1 request contract version, applicable actor,
+and complete frozen request payload. Canonical sorted JSON and a SHA-256 digest
+make equality stable; the adapter compares both exact canonical content and the
+digest, so a key reused for different content is a collision. Client labels and
+presentation text are absent from this identity.
+
+`DurableOperationStorePort` provides exact lookup, first reservation,
+reserved-to-dispatch-started transition, and dispatch-started-to-terminal
+recording. `SQLiteDurableOperationStore` is the sole M3 persistence adapter. It
+uses an exact format, store identity, schema version, canonical JSON, per-record
+integrity digest, `synchronous=FULL`, and transaction-guarded conditional
+updates. Incompatible metadata/schema and malformed rows fail closed without
+repair, migration, deletion, or internal-detail disclosure.
+
+`DurableOperationCoordinator` reserves and atomically claims dispatch before
+calling M1 once. Terminal exact retry returns sanitized stored correlation,
+mechanical, event, publication, projection, and synchronization evidence
+without invoking M1. Different canonical content collides. A dispatch-started
+record never redispatches automatically. It may become terminal only when M1's
+existing reconstruction path finds committed durable events for the stored
+command without reroll, dispatch, append, projection, provider, or tool work;
+otherwise it remains recovery-required.
+
+The terminal record deliberately excludes transient presentation status and
+text. Initial eligible narration may still run once and return transient text
+to the authorized caller, but retry never renarrates or treats that text as
+authority. Rejected, input-required, failed, successful, and eventless M1
+results become terminal when returned normally; an eventless crash after the
+dispatch claim remains safely ambiguous.
+
+`compose_durable_permissioned_controlled_fixture` supplies the bounded
+composition and path-bound store. M2 authorization always precedes ledger
+access and outcome disclosure. Inspection, capability discovery,
+reconstruction, permission evaluation, and denied calls do not reserve an
+operation. M3 implements no durable permission state, transport, authentication,
+Foundry, broader mechanics, save/snapshot system, repair, background work, or
+general distributed coordination, and it does not select D1–D5 or D7–D9.
 
 The other eight deferred implementation decisions, D1–D5 and D7–D9, remain
 open.
@@ -360,7 +418,10 @@ Foundry, or voice.
 - Command audit history: process-local CommandAuditJournal; it is not restart reconstructed.
 - Command replay protection: process-local dispatcher state; it is not restart persistent.
 - Caller operation correlation: supplied by the client and returned in M1
-  operation views; it is not authoritative state or durable deduplication.
+  operation views; M1 alone provides no durable deduplication.
+- M3 controlled-fixture operation identity and sanitized terminal evidence:
+  durable in a separate caller-supplied SQLite operation store. It coordinates
+  at-most-once submission but is not world-fact or mechanical authority.
 - Session identities, participant roles, controlled-fixture assignments,
   Speak-as and Act-as grants, visibility audiences, and the trusted test clock:
   immutable process-local M2 adapter state; none is durably persisted.
@@ -371,11 +432,11 @@ Foundry, or voice.
 
 All seven frozen slice milestones are complete. No unstarted milestone remains in
 this slice. The accepted Phase 2 interface baseline plus D6 and D10 constrain
-future work. M1 is implemented and verified. M2 — Identity, Permission,
-Assignment and Visibility Core — is implemented and verified within its bounded
-controlled-fixture scope. No later Phase 2 milestone is approved by this
+future work. M1, M2, and M3 are implemented and verified within their bounded
+controlled-fixture scopes. No later Phase 2 milestone is approved by this
 checkpoint. General narration, narration persistence or replay,
 semantic fact-checking of arbitrary prose, general rules, goblin tactics,
 Foundry integration, UI, voice, durable permission persistence, durable audit,
-restart-safe replay protection, snapshots, migration/repair, reconciliation,
+restart-safe replay protection beyond M3's bounded operations, snapshots,
+migration/repair, reconciliation,
 background work, and cross-process coordination remain future work.

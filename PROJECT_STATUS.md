@@ -3,18 +3,21 @@
 ## Checkpoint
 
 - Branch: develop
-- Checkpoint scope: the completed seven-milestone First Playable Vertical Slice, the formally accepted Phase 2 low-fidelity interface design baseline, completed Phase 2 M1, and implemented and verified Phase 2 M2
+- Checkpoint scope: the completed seven-milestone First Playable Vertical Slice, the formally accepted Phase 2 low-fidelity interface design baseline, and completed and verified Phase 2 M1, M2, and M3
 - Completed slice milestone: **Milestone 7 — End-to-End First Playable Validation**
 - Accepted Phase 2 design source: SHA-256 `21A77F35DC5606B49306F85691F55F17FCABDB71E374BBBA63F869739A640AA3` on 2026-07-29
 - Accepted Phase 2 decisions on 2026-07-29: **D6 — Core/client API/adapter/permission/save/sync boundaries** and **D10 — Implementation sequencing**
 - Completed Phase 2 milestone: **M1 — Client-Neutral Authority and Operation Contracts**
 - Completed Phase 2 milestone: **M2 — Identity, Permission, Assignment and Visibility Core**
+- Completed Phase 2 milestone: **M3 — Durable Operation Identity and Idempotent Submission Core**
 
 The headless engine-level first playable is complete. The Phase 2 interface
 design baseline is accepted, but the described UI and Foundry integration remain
 unimplemented. M1 is implemented and verified within its minimum-contract
 constraint. M2 is implemented and verified within its bounded
-controlled-fixture authorization scope. Voice remains outside this checkpoint.
+controlled-fixture authorization scope. M3 is implemented and verified for the
+same fixture's authorized state-changing submissions only. Voice remains
+outside this checkpoint.
 
 ## Accepted Phase 2 design baseline
 
@@ -59,9 +62,21 @@ decisions or record an explicit revision.
   undecided where previously open. All M2 exclusions remain binding.
 - If M2 implementation requires D1–D5 or D7–D9, it must stop rather than select
   one of those decisions.
+- The project owner accepted the bounded scope of M3 — Durable Operation
+  Identity and Idempotent Submission Core — on 2026-07-30. M3 is implemented
+  and deterministically verified.
+- [PHASE_2_M3_SCOPE_PROPOSAL.md](PHASE_2_M3_SCOPE_PROPOSAL.md) and
+  [PHASE_2_M3_IMPLEMENTATION_TASK.md](PHASE_2_M3_IMPLEMENTATION_TASK.md) are the
+  accepted scope and single-pass execution records.
+- M3 persists campaign-scoped canonical operation identity, lifecycle, and
+  sanitized terminal evidence for selection and controlled-round submissions.
+  It neither persists permission state nor changes M1 or engine authority.
+- Exact terminal retries bypass M1 and presentation work; collisions and
+  dispatch-started ambiguity fail closed. Existing durable event facts may
+  prove completion only through M1's no-reroll correlation path.
 
 The other eight deferred implementation decisions, D1–D5 and D7–D9, remain
-open. M2 did not select or finalize any of them.
+open. M2 and M3 did not select or finalize any of them.
 
 ## Implemented behavior
 
@@ -152,6 +167,36 @@ open. M2 did not select or finalize any of them.
   adapters pointing inward, the M1 authority adapter independent of M2, and the
   deterministic engine independent of both application and adapter layers.
 
+### Phase 2 M3 — Durable Operation Identity and Idempotent Submission Core
+
+- Immutable `phase2-m3-v1` contracts define campaign-scoped operation keys,
+  bounded selection/round kinds, canonical request identity and SHA-256
+  fingerprint, reserved/dispatch-started/terminal lifecycle, replay
+  disposition, sanitized terminal correlation/outcome, and fixed diagnostics.
+- Canonical identity binds the resolved participant, campaign, operation kind,
+  M1 contract version, target actor, and complete bounded request payload.
+  Labels and presentation text are excluded.
+- `DurableOperationStorePort` owns exact lookup, first reservation,
+  dispatch-started transition, and terminal recording. The dedicated
+  `SQLiteDurableOperationStore` validates exact format/store/schema identity,
+  canonical serialization, record integrity, and transaction-guarded state
+  transitions.
+- `DurableOperationCoordinator` runs only after M2 authorization and before M1.
+  A new request claims dispatch once; a terminal exact retry returns stored
+  sanitized evidence without M1; changed content under the same key collides;
+  ambiguous dispatch never redispatches.
+- A dispatch-started record may become terminal only when M1's existing
+  correlation path finds committed durable event evidence. Eventless or
+  otherwise unproven completion remains recovery-required.
+- `compose_durable_permissioned_controlled_fixture` supplies the bounded M3
+  composition. Inspection, capability discovery, permission evaluation, and
+  unauthorized calls create no operation record and disclose no stored result.
+- Initial eligible narration remains transient. Its text may be returned once
+  to the authorized caller but is excluded from terminal durable evidence;
+  replay neither persists nor regenerates it.
+- Dependency guards keep contracts and coordinator client-neutral, SQLite in a
+  concrete adapter, and the engine independent of application and adapters.
+
 ### First Playable Vertical Slice Milestones 1–7
 
 - Explicit V1 fixture identities for campaign vertical-slice-v1, journal vertical-slice-v1-events, scene controlled-goblin-encounter, Nekria, and goblin-1.
@@ -181,15 +226,12 @@ All seven milestones of the accepted vertical slice are implemented and verified
 
 ## Verification
 
-- Focused Phase 2 M2 contracts, evaluator, permissioned façade, controlled
-  journeys, reconstruction barriers, visibility, and dependency tests:
-  **57 passed**.
-- Complete client-neutral application and dependency suite, including M1
-  compatibility: **89 passed**.
-- Complete application and engine suite covering command, policy, pipeline,
-  projection, persistence, runtime, restart, narration, acceptance, M1, M2, and
-  dependency behavior: **607 passed**.
-- Complete deterministic pytest suite: **679 passed**, with
+- Focused Phase 2 M3 contracts, store, coordinator, authorization, real-fixture
+  effects, restart, collision, ambiguity, and replay tests: **21 passed**.
+- Focused dependency-direction and M2 compatibility tests: **36 passed**.
+- Complete client-neutral application suite, including M1/M2 compatibility:
+  **87 passed**.
+- Complete deterministic pytest suite: **701 passed**, with
   `dungeon_manager/ai/test_live_tool_loop_validation.py` explicitly excluded.
 - Five isolated legacy smoke modules: **passed** for models, storage, managers, tools, and registry.
 - Normal data/ and logs/ manifest: **unchanged** by path, type, size, UTC modification timestamp, and SHA-256.
@@ -201,13 +243,15 @@ The two deterministic guard tests stored in dungeon_manager/ai/test_live_tool_lo
 
 - Narration is implemented only for the single verified controlled-round event. It does not provide semantic proof of unrestricted provider prose, general event narration, persistence, streaming, retry, fallback, or automatic replay after restart.
 - ToolAgent and tools are not part of the narration path and remain disconnected from controlled combat.
-- Process-local audit history, replay guards, provider history, narration text, and Python object identity do not survive restart; no new persistence mechanism was added for them.
-- All seven frozen slice milestones plus Phase 2 M1 and M2 are complete and
+- Process-local audit history, command replay guards, provider history, narration text, and Python object identity do not survive restart. M3 persists only its bounded operation ledger and sanitized terminal evidence.
+- All seven frozen slice milestones plus Phase 2 M1, M2, and M3 are complete and
   verified. No later Phase 2 milestone is approved by this checkpoint.
 - The slice is one fixed campaign, one selectable player character, one hostile goblin, one permitted rapier attack, and one aggregate controlled-round event.
 - Goblin tactical behavior is deliberately absent; the goblin-first path records only the accepted no-action advancement.
 - Foundry VTT integration, UI, voice, general D&D rules, movement, spells, campaign discovery, editors, and broader content systems are not implemented.
-- Event history is durable. Command-audit history, replay protection, and world-state snapshots remain process-local.
+- Event history and the bounded M3 operation ledger are durable. Command-audit
+  history, dispatcher replay protection, and world-state snapshots remain
+  process-local.
 - M2 identities, assignments, grants, audiences, and clock data are
   process-local only; authentication and durable permission persistence are not
   implemented.
@@ -217,6 +261,6 @@ The two deterministic guard tests stored in dungeon_manager/ai/test_live_tool_lo
 ## Next action
 
 No unstarted milestone remains in the frozen seven-milestone slice. Phase 2 M1
-and M2 are complete and verified. No later Phase 2 milestone is approved or
+and M1–M3 are complete and verified. No later Phase 2 milestone is approved or
 scheduled; the next action requires a separately accepted bounded proposal.
-D1–D5 and D7–D9 remain open, and the M2 exclusions remain binding.
+D1–D5 and D7–D9 remain open, and the M2/M3 exclusions remain binding.
